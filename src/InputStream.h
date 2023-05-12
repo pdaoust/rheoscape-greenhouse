@@ -1,12 +1,12 @@
-#ifndef PAULDAOUST_SENSOR_STREAM_H
-#define PAULDAOUST_SENSOR_STREAM_H
+#ifndef PAULDAOUST_INPUT_STREAM_H
+#define PAULDAOUST_INPUT_STREAM_H
 
 #include <optional>
 #include <AsyncTimer.h>
-#include <Sensor.h>
+#include <Input.h>
 
 template <typename T>
-class SensorStream : Runnable {
+class InputStream : Runnable {
   public:
     struct Item<T> {
       unsigned long timestamp;
@@ -17,18 +17,18 @@ class SensorStream : Runnable {
 };
 
 template <typename T>
-class SensorBuffer : SensorStream<T> {
+class InputBuffer : InputStream<T> {
   private:
     std::queue<Item<T>> _buffer;
     AsyncTimer _timer;
   
   public:
-    SensorBuffer(Sensor<T> wrappedSensor, unsigned long interval)
+    InputBuffer(Input<T> wrappedInput, unsigned long interval)
     : _timer(AsyncTimer(
         interval,
         0,
-        [this, wrappedSensor]() {
-          _buffer.push(Item<T>{millis(), wrappedSensor.read()});
+        [this, wrappedInput]() {
+          _buffer.push(Item<T>{millis(), wrappedInput.read()});
         }
       ))
     { }

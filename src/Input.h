@@ -1,5 +1,5 @@
-#ifndef PAULDAOUST_SENSOR_H
-#define PAULDAOUST_SENSOR_H
+#ifndef PAULDAOUST_INPUT_H
+#define PAULDAOUST_INPUT_H
 
 #include <Arduino.h>
 #include <AsyncTimer.h>
@@ -15,48 +15,48 @@
 #include <BH1750.h>
 
 template <typename TVal>
-class Sensor {
+class Input {
   public:
     virtual std::optional<TVal> read();
 };
 
 template <typename TChan, typename TVal>
-class MultiSensor {
+class MultiInput {
   public:
     virtual std::optional<TVal> readChannel(TChan channel);
-    Sensor<TVal> getSensorForChannel(TChan channel);
+    Input<TVal> getInputForChannel(TChan channel);
 };
 
 template <typename TChan, typename TVal>
-class SingleChannelOfMultiSensor : public Sensor<TVal> {
+class SingleChannelOfMultiInput : public Input<TVal> {
   private:
-    MultiSensor<TChan, TVal> _wrappedSensor;
+    MultiInput<TChan, TVal> _wrappedInput;
     TChan _channel;
 
   public:
-    SingleChannelOfMultiSensor(MultiSensor<TChan, TVal> wrappedSensor, TChan channel)
+    SingleChannelOfMultiInput(MultiInput<TChan, TVal> wrappedInput, TChan channel)
       :
-        _wrappedSensor(wrappedSensor),
+        _wrappedInput(wrappedInput),
         _channel(channel)
       { }
 
     std::optional<TVal> read() {
-      return _wrappedSensor.readChannel(_channel);
+      return _wrappedInput.readChannel(_channel);
     }
 };
 
 template <typename TChan, typename TVal>
-Sensor<TVal> MultiSensor<TChan, TVal>::getSensorForChannel(TChan channel) {
-  return SingleChannelOfMultiSensor(this, channel);
+Input<TVal> MultiInput<TChan, TVal>::getInputForChannel(TChan channel) {
+  return SingleChannelOfMultiInput(this, channel);
 }
 
 template <typename TVal>
-class PointerSensor : Sensor<TVal> {
+class PointerInput : Input<TVal> {
   private:
     TVal* _pointer;
 
   public:
-    PointerSensor(TVal* pointer) : _pointer(pointer) { }
+    PointerInput(TVal* pointer) : _pointer(pointer) { }
 
     std::optional<TVal> read() {
       return &_pointer;
@@ -64,7 +64,7 @@ class PointerSensor : Sensor<TVal> {
 };
 
 template <typename TVal>
-class SettableSensor : Sensor<TVal> {
+class SettableInput : Input<TVal> {
   private:
     std::optional<TVal> _value;
 
@@ -85,13 +85,13 @@ enum AggregationType {
 };
 
 template <typename TVal>
-class SensorAggregator : MultiSensor<AggregationType, TVal> {
+class InputAggregator : MultiInput<AggregationType, TVal> {
   private:
-    std::vector<Sensor<TVal>> _sensors;
+    std::vector<Input<TVal>> _inputs;
   
   public:
-    SensorAggregator(std::vector<Sensor<TVal>> sensors)
-    : _sensors(sensors)
+    InputAggregator(std::vector<Input<TVal>> inputs)
+    : _inputs(inputs)
     { }
 
     std::optional<TVal> readChannel(AggregationType channel) {
@@ -99,8 +99,8 @@ class SensorAggregator : MultiSensor<AggregationType, TVal> {
       switch (channel) {
         case average:
           uint count;
-          for (uint i = 0; i < _sensors.size(); i ++) {
-            std::optional<TVal> value = _sensors[i].read();
+          for (uint i = 0; i < _inputs.size(); i ++) {
+            std::optional<TVal> value = _inputs[i].read();
             if (value.has_value()) {
               count ++;
               acc += value;
@@ -109,16 +109,16 @@ class SensorAggregator : MultiSensor<AggregationType, TVal> {
           acc = acc.has_value() ? acc / count : acc;
           break;
         case minimum:
-          for (uint i = 0; i < _sensors.size(); i ++) {
-            std::optional<TVal> value = _sensors[i].read();
+          for (uint i = 0; i < _inputs.size(); i ++) {
+            std::optional<TVal> value = _inputs[i].read();
             if (value.has_value()) {
               acc = acc.has_value() ? min(acc, value) : value;
             }
           }
           break;
         case maximum:
-          for (uint i = 0; i < _sensors.size(); i ++) {
-            std::optional<TVal> value = _sensors[i].read();
+          for (uint i = 0; i < _inputs.size(); i ++) {
+            std::optional<TVal> value = _inputs[i].read();
             if (value.has_value()) {
               acc = acc.has_value() ? max(acc, value) : value;
             }
@@ -131,20 +131,20 @@ class SensorAggregator : MultiSensor<AggregationType, TVal> {
 };
 
 template <typename TVal>
-class ThrottledSensor : Sensor<TVal>, Runnable {
+class ThrottledInput : Input<TVal>, Runnable {
   private:
-    Sensor<TVal> _wrappedSensor;
+    Input<TVal> _wrappedInput;
     ThrottlingTimer _timer;
     std::optional<TVal> _lastReadValue;
   
   public:
-    ThrottledSensor(Sensor<TVal> wrappedSensor, unsigned long interval)
+    ThrottledInput(Input<TVal> wrappedInput, unsigned long interval)
     :
-      _wrappedSensor(wrappedSensor),
+      _wrappedInput(wrappedInput),
       _timer(ThrottlingTimer(
         interval,
         [this]() {
-          _lastReadValue = _wrappedSensor.read();
+          _lastReadValue = _wrappedInput.read();
           _timer.reset();
         }
       ))
@@ -161,50 +161,50 @@ class ThrottledSensor : Sensor<TVal>, Runnable {
 };
 
 template <typename TOuter, typename TInner>
-class SensorTranslator : Sensor<TOuter> {
+class InputTranslator : Input<TOuter> {
   private:
-    Sensor<TInner> _wrappedSensor;
+    Input<TInner> _wrappedInput;
     const std::function<std::optional<TOuter>(std::optional<TInner>)>& _translator;
 
   public:
-    SensorTranslater(Sensor<Tinner> wrappedSensor, const std::function<std::optional<TOuter>(std::optional<TInner>)>& translator)
+    InputTranslater(Input<Tinner> wrappedInput, const std::function<std::optional<TOuter>(std::optional<TInner>)>& translator)
     :
-      _wrappedSensor(wrappedSensor),
+      _wrappedInput(wrappedInput),
       _translator(translator);
     { }
 
     st::optional<TOuter> read() {
-      return _translator(_wrappedSensor.read());
+      return _translator(_wrappedInput.read());
     }
 };
 
-// Add a delay into a sensor's reading,
+// Add a delay into a input's reading,
 // where it takes a given amount of time to reach the new reading.
 // For example, for a hysteresiser that can only move 1 step per second,
-// if the underlying sensor read 10 a second ago and now reads 20,
+// if the underlying input read 10 a second ago and now reads 20,
 // it will actually read 11 now, 12 next second, and so forth
 // until it finally reads 20 in 10 seconds.
-// Of course, if the sensor goes back down to 10 the next second,
+// Of course, if the input goes back down to 10 the next second,
 // it'll head towards that value.
 template <typename TVal>
-class SensorHysteresiser : Sensor<TVal> {
+class InputHysteresiser : Input<TVal> {
   private:
-    Sensor<TVal> _wrappedSensor;
+    Input<TVal> _wrappedInput;
     unsigned long _interval;
     TVal _stepsPerInterval;
     std::optional<TVal> _lastValue;
     unsigned long _lastRun;
 
   public:
-    SensorHysteresiser(Sensor<TVal> wrappedSensor, unsigned long interval, TVal stepsPerInterval)
+    InputHysteresiser(Input<TVal> wrappedInput, unsigned long interval, TVal stepsPerInterval)
     :
-      _wrappedSensor(wrappedSensor),
+      _wrappedInput(wrappedInput),
       _interval(interval),
       _stepsPerInterval(stepsPerInterval)
     { }
   
     std::optional<TVal> read() {
-      std::optional<TVal> newValue = _wrappedSensor.read();
+      std::optional<TVal> newValue = _wrappedInput.read();
       if (!newValue.has_value()) {
         return _lastValue;
       }
@@ -221,25 +221,25 @@ class SensorHysteresiser : Sensor<TVal> {
     }
 };
 
-// Smooth a sensor reading over a moving average time interval in milliseconds,
+// Smooth a input reading over a moving average time interval in milliseconds,
 // using the exponential moving average or single-pole IIR method.
 template <typename TVal>
-class SensorExponentialMovingAverager : Sensor<TVal> {
+class InputExponentialMovingAverager : Input<TVal> {
   private:
-    Sensor<TVal> _wrappedSensor;
+    Input<TVal> _wrappedInput;
     unsigned long _averageOver;
     std::optional<TVal> _lastValue;
     unsigned long _lastRun;
   
   public:
-    SensorExponentialMovingAverager(Sensor<TVal> wrappedSensor, unsigned long averageOver)
+    InputExponentialMovingAverager(Input<TVal> wrappedInput, unsigned long averageOver)
     :
-      _wrappedSensor(wrappedSensor),
+      _wrappedInput(wrappedInput),
       _averageOver(averageOver)
     { }
 
     std::optional<TVal> read() {
-      std::optional<TVal> newValue = _wrappedSensor.read();
+      std::optional<TVal> newValue = _wrappedInput.read();
       if (!newValue.has_value()) {
         return _lastValue;
       }
@@ -260,9 +260,9 @@ class SensorExponentialMovingAverager : Sensor<TVal> {
 
 typedef std::tuple<uint8_t, uint8_t, uint8_t, uint8_t, uint8_t, uint8_t, uint8_t, uint8_t> OneWireAddress;
 
-class Ds18b20 : MultiSensor<const OneWireAddress, float> {
+class Ds18b20 : MultiInput<const OneWireAddress, float> {
   private:
-    DallasTemperature _sensors;
+    DallasTemperature _inputs;
     std::vector<OneWireAddress> _deviceAddresses;
     std::map<OneWireAddress, float> _deviceTemperatures;
     std::map<OneWireAddress, float> _deviceTemperatureOffsets;
@@ -289,12 +289,12 @@ class Ds18b20 : MultiSensor<const OneWireAddress, float> {
         0,
         [this, resolution]() {
           if (_firstRun) {
-            _sensors.setResolution(resolution);
+            _inputs.setResolution(resolution);
             // Set up in sync mode for first run.
-            _sensors.setWaitForConversion(true);
-            _sensors.requestTemperatures();
+            _inputs.setWaitForConversion(true);
+            _inputs.requestTemperatures();
             // Set up in async mode for subsequent runs.
-            _sensors.setWaitForConversion(false);
+            _inputs.setWaitForConversion(false);
           }
           for (const OneWireAddress &address : _deviceAddresses) {
             auto maybeTempOffsetPair = _deviceTemperatureOffsets.find(address);
@@ -311,15 +311,15 @@ class Ds18b20 : MultiSensor<const OneWireAddress, float> {
               std::get<6>(address),
               std::get<7>(address)
             };
-            _deviceTemperatures[address] = _sensors.getTempC(addressA) + tempOffset;
+            _deviceTemperatures[address] = _inputs.getTempC(addressA) + tempOffset;
           }
           // Set up for next run.
-          _sensors.requestTemperatures();
+          _inputs.requestTemperatures();
         }
       ))
     {
       auto oneWire = OneWire(dataPin);
-      _sensors = DallasTemperature(&oneWire);
+      _inputs = DallasTemperature(&oneWire);
     }
 
     std::optional<float> readChannel(const OneWireAddress address) {
@@ -333,9 +333,9 @@ enum class Sht21Channel {
   humidity
 };
 
-class Sht21 : MultiSensor<Sht21Channel, float> {
+class Sht21 : MultiInput<Sht21Channel, float> {
   private:
-    SHT21 _sensor;
+    SHT21 _input;
     float _tempOffset;
     std::optional<float> _lastReadTemp;
     std::optional<float> _lastReadHum;
@@ -349,10 +349,10 @@ class Sht21 : MultiSensor<Sht21Channel, float> {
   public:
     Sht21(uint8_t dataPin, uint8_t clockPin, float tempOffset = 0.0)
     :
-      _sensor(SHT21()),
+      _input(SHT21()),
       _tempOffset(tempOffset)
     {
-      _sensor.begin(dataPin, clockPin);
+      _input.begin(dataPin, clockPin);
     }
 
     std::optional<float> readChannel(Sht21Channel channel) {
@@ -361,12 +361,12 @@ class Sht21 : MultiSensor<Sht21Channel, float> {
           // Not polling for anything. Start the poll on the requested channel.
           switch (channel) {
             case Sht21Channel::tempC:
-              _sensor.requestTemperature();
+              _input.requestTemperature();
               _mode = 1;
               // And return the last known value.
               return _lastReadTemp;
             case Sht21Channel::humidity:
-              _sensor.requestHumidity();
+              _input.requestHumidity();
               _mode = 2;
               return _lastReadHum;
           }
@@ -376,8 +376,8 @@ class Sht21 : MultiSensor<Sht21Channel, float> {
             case Sht21Channel::tempC:
               // Once it's ready and there are no errors,
               // get the temp and reset the polling mode so we know we can poll again.
-              if (_sensor.reqTempReady() && _sensor.readTemperature()) {
-                _lastReadTemp = _sensor.getTemperature();
+              if (_input.reqTempReady() && _input.readTemperature()) {
+                _lastReadTemp = _input.getTemperature();
                 _mode = 0;
               }
               return _lastReadTemp;
@@ -388,8 +388,8 @@ class Sht21 : MultiSensor<Sht21Channel, float> {
         case 2:
           switch (channel) {
             case Sht21Channel::humidity:
-              if (_sensor.reqHumReady() && _sensor.readHumidity()) {
-                _lastReadHum = _sensor.getHumidity();
+              if (_input.reqHumReady() && _input.readHumidity()) {
+                _lastReadHum = _input.getHumidity();
                 _mode = 0;
               }
               return _lastReadHum;
@@ -406,9 +406,9 @@ enum class Bme280Channel {
   pressureKpa
 };
 
-class Bme280 : MultiSensor<Bme280Channel, float> {
+class Bme280 : MultiInput<Bme280Channel, float> {
   private:
-    BME280_DEV _sensor;
+    BME280_DEV _input;
     float _tempOffset;
     float _humOffset;
     float _pressOffset;
@@ -424,17 +424,17 @@ class Bme280 : MultiSensor<Bme280Channel, float> {
   public:
     Bme280(uint8_t csPin, float tempOffset = 0.0, float humOffset = 0.0, float pressOffset = 0.0)
     :
-      _sensor(BME280_DEV(csPin, HSPI, _instantiateSpiClassRef())),
+      _input(BME280_DEV(csPin, HSPI, _instantiateSpiClassRef())),
       _tempOffset(tempOffset),
       _humOffset(humOffset),
       _pressOffset(pressOffset)
     {
-      while (!_sensor.begin(FORCED_MODE, OVERSAMPLING_X1, OVERSAMPLING_X1, OVERSAMPLING_X1, IIR_FILTER_OFF, TIME_STANDBY_1000MS));
+      while (!_input.begin(FORCED_MODE, OVERSAMPLING_X1, OVERSAMPLING_X1, OVERSAMPLING_X1, IIR_FILTER_OFF, TIME_STANDBY_1000MS));
     }
 
     std::optional<float> readChannel(Bme280Channel channel) {
       float temp, press, hum, _;
-      if (_sensor.getMeasurements(temp, press, hum, _)) {
+      if (_input.getMeasurements(temp, press, hum, _)) {
         _lastReadTemp = temp;
         // Pressure is given in millibars, but we want it in kPa.
         _lastReadPress = press * 10;
@@ -452,7 +452,7 @@ class Bme280 : MultiSensor<Bme280Channel, float> {
     }
 };
 
-class Bh1750 : Sensor<float> {
+class Bh1750 : Input<float> {
   private:
     BH1750 _lightMeter;
     AsyncTimer _sampleInterval;
@@ -482,14 +482,14 @@ class Bh1750 : Sensor<float> {
     }
 };
 
-class OnePinSensor : Sensor<bool> {
+class OnePinInput : Input<bool> {
   private:
     uint8_t _pin;
     bool _onState;
     unsigned long _debounceInterval;
   
   public:
-    OnePinSensor(uint8_t pin, uint8_t mode, unsigned long debounceInterval = 0)
+    OnePinInput(uint8_t pin, uint8_t mode, unsigned long debounceInterval = 0)
     :
       _pin(pin),
       _onState(mode == INPUT_PULLDOWN)

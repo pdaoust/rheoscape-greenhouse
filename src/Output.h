@@ -1,5 +1,5 @@
-#ifndef PAULDAOUST_CONTROLLER_H
-#define PAULDAOUST_CONTROLLER_H
+#ifndef PAULDAOUST_OUTPUT_H
+#define PAULDAOUST_OUTPUT_H
 
 #include <Arduino.h>
 #include <AsyncTimer.h>
@@ -13,13 +13,13 @@
 #define FAN_CYCLE_TIME 10000
 
 template <typename T>
-class Controller {
+class Output {
   public:
-    virtual void setState(T state);
+    virtual void write(T state);
 };
 
 template <typename T>
-class VariableController : public Controller<T> {
+class VariableOutput : public Output<T> {
   public:
     virtual Range<T> getRange();
 };
@@ -31,25 +31,25 @@ enum TriState {
 };
 
 template <typename T>
-class ThrottledController : public Controller<T>, public Runnable {
+class ThrottledOutput : public Output<T>, public Runnable {
   private:
     ThrottlingTimer _timer;
-    Controller<T> _wrappedController;
+    Output<T> _wrappedOutput;
     TOuter _outerState;
 
   public:
-    ThrottledController(Controller<T> wrappedController, unsigned long minCycleTime)
-    : _wrappedController(wrappedController),
+    ThrottledOutput(Output<T> wrappedOutput, unsigned long minCycleTime)
+    : _wrappedOutput(wrappedOutput),
       _timer(ThrottlingTimer(
         minCycleTime,
         [this]() {
-          _wrappedController.setState(_outerState);
+          _wrappedOutput.write(_outerState);
           _timer.reset();
         }
       ))
     { }
 
-    void setState(T state) {
+    void write(T state) {
       run();
       _outerState = state;
     }
@@ -60,32 +60,32 @@ class ThrottledController : public Controller<T>, public Runnable {
 };
 
 template <typename TOuter, typename TInner>
-class ControllerTranslator : Controller<TOuter> {
+class OutputTranslator : Output<TOuter> {
   private:
-    Controller<TInner> _wrappedController;
+    Output<TInner> _wrappedOutput;
     const std::function<TInner(TOuter)>& _translator;
   
   public:
-    ControllerTranslator(Controller<TInner> wrappedController, const std::function<TInner(TOuter)>& translator)
+    OutputTranslator(Output<TInner> wrappedOutput, const std::function<TInner(TOuter)>& translator)
     :
-      _wrappedController(wrappedController),
+      _wrappedOutput(wrappedOutput),
       _translator(translator)
     { }
 
-    void setState(TOuter state) {
-      _wrappedController.setState(_translator(state));
+    void write(TOuter state) {
+      _wrappedOutput.write(_translator(state));
     }
 };
 
-class TimedLatchController : public Controller<bool>, public Runnable {
+class TimedLatchOutput : public Output<bool>, public Runnable {
   private:
-    Controller<bool> _wrappedController;
+    Output<bool> _wrappedOutput;
     AsyncTimer _timeout;
   
   public:
-    TimedLatchController(Controller<bool> wrappedController, unsigned long timeout)
+    TimedLatchOutput(Output<bool> wrappedOutput, unsigned long timeout)
     :
-      _wrappedController(wrappedController),
+      _wrappedOutput(wrappedOutput),
       _timeout(AsyncTimer(
         timeout,
         2,
@@ -93,43 +93,43 @@ class TimedLatchController : public Controller<bool>, public Runnable {
           // On the first run, where count = 0, turn it on.
           // On the second run, turn it off.
           if (!_timeout.getCount()) {
-            _wrappedController.setState(true);
+            _wrappedOutput.write(true);
           } else {
-            _wrappedController.setState(false);
+            _wrappedOutput.write(false);
           }
         },
         -1
       ))
     { }
 
-    void setState(bool state) {
+    void write(bool state) {
       _timeout.reset(state ? 0 : -1);
     }
 };
 
-class BlinkingController : public Controller<bool>, public Runnable {
+class BlinkingOutput : public Output<bool>, public Runnable {
   private:
     AsyncTimer _fullCycle;
-    TimedLatchController _onCycle;
+    TimedLatchOutput _onCycle;
 
   public:
-    BlinkingController(Controller<bool> wrappedController, unsigned long onTime, unsigned long offTime)
+    BlinkingOutput(Output<bool> wrappedOutput, unsigned long onTime, unsigned long offTime)
     :
-      _onCycle(TimedLatchController(
-        wrappedController,
+      _onCycle(TimedLatchOutput(
+        wrappedOutput,
         onTime
       )),
       _fullCycle(AsyncTimer(
         onTime + offTime,
         0,
         [this]() {
-          _onCycle.setState(true);
+          _onCycle.write(true);
         },
         -1
       ))
     { }
 
-    void setState(bool state) {
+    void write(bool state) {
       if (state) {
         _fullCycle.start();
       } else {
@@ -142,7 +142,7 @@ class BlinkingController : public Controller<bool>, public Runnable {
     }
 };
 
-class Switch : public Controller<bool> {
+class Switch : public Output<bool> {
   private:
     // Does this relay go on when its pin is HIGH or LOW?
     bool _onState;
@@ -154,25 +154,25 @@ class Switch : public Controller<bool> {
       _onState(onState)
     {
       pinMode(_pin, OUTPUT);
-      setState(startingState);
+      write(startingState);
     }
 
-    void setState(bool state) {
+    void write(bool state) {
       digitalWrite(_pin, _onState == state);
     }
 };
 
-class Relay : public ThrottledController<bool>, public Controller<bool> {
+class Relay : public ThrottledOutput<bool>, public Output<bool> {
   public:
     Relay(uint8_t pin, bool onState, unsigned long minCycleTime, bool startingState = false)
-    : ThrottledController(
+    : ThrottledOutput(
         Switch(pin, onState, startingState),
         minCycleTime
       )
     { }
 };
 
-class MotorDriver : public VariableController<float> {
+class MotorDriver : public VariableOutput<float> {
     uint8_t _forwardPin;
     uint8_t _backwardPin;
     uint8_t _pwmPin;
@@ -191,10 +191,10 @@ class MotorDriver : public VariableController<float> {
       if (_pwmPin > 0) {
         pinMode(_pwmPin, OUTPUT);
       }
-      setState(startingState);
+      write(startingState);
     }
 
-    void setState(float state) {
+    void write(float state) {
       if (_pwmPin > 0) {
         // Normalise -1...0 to 0...1023 and 0...1 to 0...1023 too, to drive PWM pins.
         int pwmValue = round(abs(state) * 1023);
@@ -220,11 +220,11 @@ class MotorDriver : public VariableController<float> {
 };
 
 // WARNING: This should only be used with an actuator that has a limit switch.
-class Cover : public ControllerTranslator<bool, float>, public Controller<bool> {
+class Cover : public OutputTranslator<bool, float>, public Output<bool> {
   public:
-    Cover(MotorDriver wrappedController, unsigned long estimatedExcursionTime)
-    : ControllerTranslator(
-      ThrottledController(wrappedController, estimatedExcursionTime),
+    Cover(MotorDriver wrappedOutput, unsigned long estimatedExcursionTime)
+    : OutputTranslator(
+      ThrottledOutput(wrappedOutput, estimatedExcursionTime),
       [](bool outerState) {
         return outerState ? 1.0 : -1.0;
       }
@@ -232,21 +232,21 @@ class Cover : public ControllerTranslator<bool, float>, public Controller<bool> 
     { }
 };
 
-class SlowPwmController : public VariableController<float>, public Runnable {
+class SlowPwmOutput : public VariableOutput<float>, public Runnable {
   private:
-    Controller<bool> _wrappedController;
+    Output<bool> _wrappedOutput;
     AsyncTimer _timer;
     float _state;
   
   public:
-    SlowPwmController(Controller<bool> wrappedController, unsigned long minCycleTime, uint8_t pwmResolution)
+    SlowPwmOutput(Output<bool> wrappedOutput, unsigned long minCycleTime, uint8_t pwmResolution)
       :
-        _wrappedController(wrappedController),
+        _wrappedOutput(wrappedOutput),
         _timer(AsyncTimer(
           minCycleTime,
           0,
           [this, pwmResolution]() {
-            // The PWM cycle length is the minimum switching time of the wrapped controller,
+            // The PWM cycle length is the minimum switching time of the wrapped output,
             // times the PWM resolution.
             // So if the switching time is 10 ms and the PWM resolution is 10,
             // the cycle length is 10 ms * 10.
@@ -256,13 +256,13 @@ class SlowPwmController : public VariableController<float>, public Runnable {
 
             // Count how many steps have passed in this cycle.
             // If the duty is below or equal to that number of steps,
-            // turn the wrapped controller.
-            _wrappedController.setState(((_timer.getCount() % pwmResolution) <= duty ? true : false));
+            // turn the wrapped output.
+            _wrappedOutput.write(((_timer.getCount() % pwmResolution) <= duty ? true : false));
           }
         ))
     { }
 
-    void setState(float state) {
+    void write(float state) {
       _state = state;
       _timer.run();
     }

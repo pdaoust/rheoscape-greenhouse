@@ -2,10 +2,10 @@
 #include <Wire.h> 
 #include <LiquidCrystal.h>
 #include <AsyncTimer.h>
-#include <Controller.h>
+#include <Output.h>
 #include <Process.h>
 #include <Range.h>
-#include <Sensor.h>
+#include <Input.h>
 
 #define SPI_CIPO_PIN 0
 #define SPI_PICO_PIN 0
@@ -55,14 +55,14 @@
 
 class MechanicalRelayProcess : public BangBangProcessControlMethod<float> {
   public:
-    MechanicalRelayProcess(TempRange setpointRange, MechanicalRelay controller) : BangBangProcessControlMethod(setpointRange, controller) { }
-    MechanicalRelayProcess(TempRange setpointRange, MechanicalRelay controller, float startingInput) : BangBangProcessControlMethod(setpointRange, controller, startingInput) { }
+    MechanicalRelayProcess(TempRange setpointRange, MechanicalRelay output) : BangBangProcessControlMethod(setpointRange, output) { }
+    MechanicalRelayProcess(TempRange setpointRange, MechanicalRelay output, float startingInput) : BangBangProcessControlMethod(setpointRange, output, startingInput) { }
 };
 
 class VentActuatorProcess : public BangBangProcessControlMethod<float> {
   public:
-    VentActuatorProcess(TempRange setpointRange, LinearActuator controller) : BangBangProcessControlMethod(setpointRange, controller) { }
-    VentActuatorProcess(TempRange setpointRange, LinearActuator controller, float startingInput) : BangBangProcessControlMethod(setpointRange, controller, startingInput) { }
+    VentActuatorProcess(TempRange setpointRange, LinearActuator output) : BangBangProcessControlMethod(setpointRange, output) { }
+    VentActuatorProcess(TempRange setpointRange, LinearActuator output, float startingInput) : BangBangProcessControlMethod(setpointRange, output, startingInput) { }
 };
 
 static MechanicalRelayProcess heatmat1(
@@ -108,7 +108,7 @@ static VentActuatorProcess roofVents(
     ROOF_VENT_ACTUATOR_CLOSE_PIN,
     ROOF_VENT_ACTUATOR_OPEN_PIN,
     // Let's go half an hour for the cycle time.
-    // The linear actuator and its controller can take a much shorter cycle time,
+    // The linear actuator and its output can take a much shorter cycle time,
     // but it's kinda pointless.
     1000 * 60 * 30,
     // I've arbitrarily chosen 'closed' as their starting state.
@@ -133,7 +133,7 @@ LiquidCrystal lcd(HD44780_RS_PIN, HD44780_EN_PIN, HD44780_D1_PIN, HD44780_D2_PIN
 SHT21 tempHumidityMeter;
 BH1750 lightMeter;
 OneWire oneWireBus(ONEWIRE_DATA_PIN);
-DallasTemperature tempSensors(&oneWireBus);
+DallasTemperature tempInputs(&oneWireBus);
 
 AsyncTimer ds18b20Loop(
   SENSOR_INTERVAL,
@@ -179,21 +179,21 @@ static uint8_t runs = 0;
 void loop() {
   // Everything in here must be as non-blocking as poss!
   // Except for first run.
-  sensorLoop.run([]() {
-    // Read the sensors into the statics.
+  inputLoop.run([]() {
+    // Read the inputs into the statics.
     greenhouseTemp = tempHumidityMeter.requestTemperature() + SHT22_CALIBRATION_OFFSET;
     greenhouseHumidity = tempHumidityMeter.getHumidity();
     greenhouseLightLevel = lightMeter.readLightLevel();
 
     if (runs == 0) {
-      tempSensors.setWaitForConversion(true);
-      tempSensors.requestTemperatures();
-      tempSensors.setWaitForConversion(false);
+      tempInputs.setWaitForConversion(true);
+      tempInputs.requestTemperatures();
+      tempInputs.setWaitForConversion(false);
     }
-    heatmat1Temp = tempSensors.getTempC(DS18B20_HEATMAT_1_ADDRESS) + DS18B20_HEATMAT_1_CALIBRATION_OFFSET;
-    heatmat2Temp = tempSensors.getTempC(DS18B20_HEATMAT_2_ADDRESS) + DS18B20_HEATMAT_2_CALIBRATION_OFFSET;
+    heatmat1Temp = tempInputs.getTempC(DS18B20_HEATMAT_1_ADDRESS) + DS18B20_HEATMAT_1_CALIBRATION_OFFSET;
+    heatmat2Temp = tempInputs.getTempC(DS18B20_HEATMAT_2_ADDRESS) + DS18B20_HEATMAT_2_CALIBRATION_OFFSET;
     // Request temperatures for next run, because it'll take a while.
-    tempSensors.requestTemperatures();
+    tempInputs.requestTemperatures();
 
     firstRun = false;
   });
@@ -203,7 +203,7 @@ void loop() {
   }
 
   // Set process control states.
-  // This must happen outside the sensor loop,
+  // This must happen outside the input loop,
   // because some process control methods need to have their loops run all the time.
 
   // Poll button states.
