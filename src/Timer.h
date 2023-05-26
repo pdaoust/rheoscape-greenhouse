@@ -21,10 +21,14 @@ class Timer {
         return;
       }
 
-      if (millis() >= _when && !isDone()) {
+      if (millis() >= _when && !_isDone) {
         _callback();
         _isDone = true;
       }
+    }
+
+    bool isRunning() {
+      return _when && !_isDone;
     }
 
     bool isDone() {
@@ -42,31 +46,10 @@ class Timer {
 };
 
 // Call a callback over and over again, and/or up to a certain number of times.
-class RepeatTimer : public Timer {
+class RepeatTimer : private Timer {
   private:
-    unsigned long _startAt;
-    unsigned long _interval;
-    uint16_t _times;
     uint16_t _count;
     bool _isRunning = false;
-    bool _isDone = false;
-    const std::function<void()>& _innerCallback;
-
-    void _tick() {
-      _isRunning = true;
-      if (!_times || _count < _times) {
-        _innerCallback();
-        // This is one of the lines where the count will be off if tick() isn't called often enough.
-        _count ++;
-        if (_count < _times) {
-          // This is another.
-          Timer::restart(_startAt + _count * _interval);
-        } else {
-          _isRunning = false;
-          _isDone = true;
-        }
-      }
-    }
 
   public:
     RepeatTimer(
@@ -76,25 +59,67 @@ class RepeatTimer : public Timer {
       // Note that the tick() function should be called more often than this interval,
       // or it will miss some calls.
       unsigned long interval,
-      // How many times to run (zero for infinite).
-      uint16_t times,
       // The function to run.
-      const std::function<void()>& callback
+      const std::function<void()>& callback,
+      // How many times to run (zero for infinite).
+      uint16_t times = 0
     ) :
-      Timer(startAt, [this]() {
-        _tick();
-      }),
-      _interval(interval),
-      _times(times),
-      _innerCallback(callback)
+      Timer(startAt, [this, startAt, interval, times, callback]() {
+        _isRunning = true;
+        if (!times || _count < times) {
+          callback();
+          // This is one of the lines where the count will be off if tick() isn't called often enough.
+          _count ++;
+          if (_count == times) {
+            _isRunning = false;
+            return;
+          }
+          // This is another.
+          Timer::restart(startAt + _count * interval);
+        }
+     })
     { }
 
+    void tick() { Timer::tick(); }
+
     bool isRunning() {
-      return _isRunning;
+      return Timer::isRunning() && _isRunning;
     }
+
+    bool isDone() { return Timer::isDone(); }
+
+    void restart(unsigned long when) { Timer::restart(when); }
+
+    void cancel() { Timer::cancel(); }
 
     bool getCount() {
       return _count;
+    }
+};
+
+// Don't run a function more than every n milliseconds.
+// Not a timer, but timer-related.
+class Throttle {
+  private:
+    unsigned long _minDelay;
+    Timer _timer;
+    const std::function<void()>& _callback;
+
+  public:
+    Throttle(unsigned long minDelay, const std::function<void()>& callback)
+    :
+      _minDelay(minDelay),
+      _timer(Timer(0, [](){})),
+      _callback(callback)
+    { }
+
+    bool tryRun() {
+      if (_timer.isRunning()) {
+        return false;
+      }
+      _callback();
+      _timer.restart(_minDelay);
+      return true;
     }
 };
 

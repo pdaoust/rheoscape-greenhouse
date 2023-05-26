@@ -2,7 +2,7 @@
 #define PAULDAOUST_INPUT_H
 
 #include <Arduino.h>
-#include <AsyncTimer.h>
+#include <Timer.h>
 #include <map>
 #include <optional>
 #include <variant>
@@ -14,27 +14,30 @@
 #include <Wire.h>
 #include <BH1750.h>
 
+#include <Range.h>
+
 template <typename TVal>
 class Input {
   public:
-    virtual std::optional<TVal> read();
+    virtual std::optional<TVal> read() { return std::nullopt; }
 };
 
 template <typename TChan, typename TVal>
 class MultiInput {
   public:
-    virtual std::optional<TVal> readChannel(TChan channel);
+    virtual std::optional<TVal> readChannel(TChan channel) { return std::nullopt; }
+
     Input<TVal> getInputForChannel(TChan channel);
 };
 
 template <typename TChan, typename TVal>
 class SingleChannelOfMultiInput : public Input<TVal> {
   private:
-    MultiInput<TChan, TVal> _wrappedInput;
+    MultiInput<TChan, TVal>& _wrappedInput;
     TChan _channel;
 
   public:
-    SingleChannelOfMultiInput(MultiInput<TChan, TVal> wrappedInput, TChan channel)
+    SingleChannelOfMultiInput(MultiInput<TChan, TVal>& wrappedInput, TChan channel)
       :
         _wrappedInput(wrappedInput),
         _channel(channel)
@@ -47,11 +50,32 @@ class SingleChannelOfMultiInput : public Input<TVal> {
 
 template <typename TChan, typename TVal>
 Input<TVal> MultiInput<TChan, TVal>::getInputForChannel(TChan channel) {
-  return SingleChannelOfMultiInput(this, channel);
+  return SingleChannelOfMultiInput<TChan, TVal>(*this, channel);
 }
 
+// Lift a constant into an input.
 template <typename TVal>
-class PointerInput : Input<TVal> {
+class ConstantInput : public Input<TVal> {
+  private:
+    std::optional<TVal> _value;
+
+  public:
+    ConstantInput(std::optional<TVal> value) : _value(value) { }
+
+    std::optional<TVal> read() {
+      return _value;
+    }
+};
+
+// Special case that gets used a lot.
+template <typename TVal>
+Input<Range<std::optional<TVal>>> makeRangeConstantInput(TVal min, TVal max) {
+  return ConstantInput<Range<std::optional<TVal>>>(Range<std::optional<TVal>>{ min, max });
+}
+
+// A simple input that just returns whatever the value currently is at the pointer passed to it.
+template <typename TVal>
+class PointerInput : public Input<TVal> {
   private:
     TVal* _pointer;
 
@@ -63,8 +87,9 @@ class PointerInput : Input<TVal> {
     }
 };
 
+// A simple input whose value can be set.
 template <typename TVal>
-class SettableInput : Input<TVal> {
+class SettableInput : public Input<TVal> {
   private:
     std::optional<TVal> _value;
 
@@ -78,196 +103,32 @@ class SettableInput : Input<TVal> {
     }
 };
 
-enum AggregationType {
-  average,
-  maximum,
-  minimum
-};
+// DeviceAddress is a stupid type to use -- it's just an array so you hvae to pass a pointer.
+// And you can't use it as a map key.
+// Ints are easier to initialise, and they pass around better.
+// But you need a bit of conversion.
+void intToDeviceAddress(uint64_t address, DeviceAddress deviceAddress) {
+  for (uint8_t i = 0; i < 8; i ++) {
+    deviceAddress[i] = address & 0xFF;
+    address >>= 8;
+  }
+}
 
-template <typename TVal>
-class InputAggregator : MultiInput<AggregationType, TVal> {
-  private:
-    std::vector<Input<TVal>> _inputs;
-  
-  public:
-    InputAggregator(std::vector<Input<TVal>> inputs)
-    : _inputs(inputs)
-    { }
+uint64_t deviceAddressToInt(DeviceAddress deviceAddress) {
+  uint64_t address = 0;
+  for (uint8_t i = 0; i < 8; i ++) {
+    address += deviceAddress[i] & (0xFF << i * 8);
+  }
+  return address;
+}
 
-    std::optional<TVal> readChannel(AggregationType channel) {
-      std::optional<TVal> acc;
-      switch (channel) {
-        case average:
-          uint count;
-          for (uint i = 0; i < _inputs.size(); i ++) {
-            std::optional<TVal> value = _inputs[i].read();
-            if (value.has_value()) {
-              count ++;
-              acc += value;
-            }
-          }
-          acc = acc.has_value() ? acc / count : acc;
-          break;
-        case minimum:
-          for (uint i = 0; i < _inputs.size(); i ++) {
-            std::optional<TVal> value = _inputs[i].read();
-            if (value.has_value()) {
-              acc = acc.has_value() ? min(acc, value) : value;
-            }
-          }
-          break;
-        case maximum:
-          for (uint i = 0; i < _inputs.size(); i ++) {
-            std::optional<TVal> value = _inputs[i].read();
-            if (value.has_value()) {
-              acc = acc.has_value() ? max(acc, value) : value;
-            }
-          }
-          break;
-      }
-
-      return acc;
-    }
-};
-
-template <typename TVal>
-class ThrottledInput : Input<TVal>, Runnable {
-  private:
-    Input<TVal> _wrappedInput;
-    ThrottlingTimer _timer;
-    std::optional<TVal> _lastReadValue;
-  
-  public:
-    ThrottledInput(Input<TVal> wrappedInput, unsigned long interval)
-    :
-      _wrappedInput(wrappedInput),
-      _timer(ThrottlingTimer(
-        interval,
-        [this]() {
-          _lastReadValue = _wrappedInput.read();
-          _timer.reset();
-        }
-      ))
-    { }
-
-    std::optional<TVal> read() {
-      run();
-      return _lastReadValue;
-    }
-
-    void run() {
-      _timer.run();
-    }
-};
-
-template <typename TOuter, typename TInner>
-class InputTranslator : Input<TOuter> {
-  private:
-    Input<TInner> _wrappedInput;
-    const std::function<std::optional<TOuter>(std::optional<TInner>)>& _translator;
-
-  public:
-    InputTranslater(Input<Tinner> wrappedInput, const std::function<std::optional<TOuter>(std::optional<TInner>)>& translator)
-    :
-      _wrappedInput(wrappedInput),
-      _translator(translator);
-    { }
-
-    st::optional<TOuter> read() {
-      return _translator(_wrappedInput.read());
-    }
-};
-
-// Add a delay into a input's reading,
-// where it takes a given amount of time to reach the new reading.
-// For example, for a hysteresiser that can only move 1 step per second,
-// if the underlying input read 10 a second ago and now reads 20,
-// it will actually read 11 now, 12 next second, and so forth
-// until it finally reads 20 in 10 seconds.
-// Of course, if the input goes back down to 10 the next second,
-// it'll head towards that value.
-template <typename TVal>
-class InputHysteresiser : Input<TVal> {
-  private:
-    Input<TVal> _wrappedInput;
-    unsigned long _interval;
-    TVal _stepsPerInterval;
-    std::optional<TVal> _lastValue;
-    unsigned long _lastRun;
-
-  public:
-    InputHysteresiser(Input<TVal> wrappedInput, unsigned long interval, TVal stepsPerInterval)
-    :
-      _wrappedInput(wrappedInput),
-      _interval(interval),
-      _stepsPerInterval(stepsPerInterval)
-    { }
-  
-    std::optional<TVal> read() {
-      std::optional<TVal> newValue = _wrappedInput.read();
-      if (!newValue.has_value()) {
-        return _lastValue;
-      }
-
-      unsigned long now = millis();
-      if (_lastRun) {
-        _lastValue = _lastValue + (float)(now - _lastRun) / _interval * _stepsPerInterval;
-      } else {
-        _lastValue = newValue;
-      }
-
-      _lastRun = now;
-      return _lastValue;
-    }
-};
-
-// Smooth a input reading over a moving average time interval in milliseconds,
-// using the exponential moving average or single-pole IIR method.
-template <typename TVal>
-class InputExponentialMovingAverager : Input<TVal> {
-  private:
-    Input<TVal> _wrappedInput;
-    unsigned long _averageOver;
-    std::optional<TVal> _lastValue;
-    unsigned long _lastRun;
-  
-  public:
-    InputExponentialMovingAverager(Input<TVal> wrappedInput, unsigned long averageOver)
-    :
-      _wrappedInput(wrappedInput),
-      _averageOver(averageOver)
-    { }
-
-    std::optional<TVal> read() {
-      std::optional<TVal> newValue = _wrappedInput.read();
-      if (!newValue.has_value()) {
-        return _lastValue;
-      }
-
-      unsigned long now = millis();
-      if (_lastRun) {
-        float intervalsSinceLastRun = (float)(now - _lastRun) / _averageOver;
-        _lastValue -= _lastValue / intervalsSinceLastRun;
-        _lastValue += newValue / intervalsSinceLastRun;
-      } else {
-        _lastValue = newValue;
-      }
-
-      _lastRun = now;
-      return _lastValue;
-    }
-};
-
-typedef std::tuple<uint8_t, uint8_t, uint8_t, uint8_t, uint8_t, uint8_t, uint8_t, uint8_t> OneWireAddress;
-
-class Ds18b20 : MultiInput<const OneWireAddress, float> {
+class Ds18b20 : public MultiInput<uint64_t, float> {
   private:
     DallasTemperature _inputs;
-    std::vector<OneWireAddress> _deviceAddresses;
-    std::map<OneWireAddress, float> _deviceTemperatures;
-    std::map<OneWireAddress, float> _deviceTemperatureOffsets;
-    AsyncTimer _timer;
-    bool _firstRun;
+    std::vector<uint64_t> _deviceAddresses;
+    std::map<uint64_t, float> _deviceTemperatures;
+    std::map<uint64_t, float> _deviceTemperatureOffsets;
+    RepeatTimer _timer;
 
   public:
     enum Resolution {
@@ -277,53 +138,52 @@ class Ds18b20 : MultiInput<const OneWireAddress, float> {
       sixteenth_degree = 12
     };
 
-    Ds18b20(uint8_t dataPin, std::vector<OneWireAddress> addresses, Resolution resolution = half_degree, std::map<OneWireAddress, float> deviceTemperatureOffsets = std::map<OneWireAddress, float>())
+    Ds18b20(uint8_t dataPin, Resolution resolution = half_degree, std::map<uint64_t, float> deviceTemperatureOffsets = std::map<uint64_t, float>())
     :
-      _deviceAddresses(addresses),
       _deviceTemperatureOffsets(deviceTemperatureOffsets),
-      // We use an AsyncTimer here because unfortunately you can't poll using DallasTemperature.
-      _timer(AsyncTimer(
+      // We use an RepeatTimer here because unfortunately you can't poll using DallasTemperature.
+      _timer(RepeatTimer(
+        millis(),
         // This gnarly math is copied from https://github.com/milesburton/Arduino-Temperature-Control-Library/blob/master/examples/WaitForConversion/WaitForConversion.ino#L58
         // in which the proper timeout is determined by bit math
         750 / (1 << (12 - resolution)),
-        0,
         [this, resolution]() {
-          if (_firstRun) {
-            _inputs.setResolution(resolution);
-            // Set up in sync mode for first run.
-            _inputs.setWaitForConversion(true);
-            _inputs.requestTemperatures();
-            // Set up in async mode for subsequent runs.
-            _inputs.setWaitForConversion(false);
-          }
-          for (const OneWireAddress &address : _deviceAddresses) {
-            auto maybeTempOffsetPair = _deviceTemperatureOffsets.find(address);
-            float tempOffset = (maybeTempOffsetPair == _deviceTemperatureOffsets.end())
-              ? 0.0
-              : maybeTempOffsetPair->second;
-            DeviceAddress addressA {
-              std::get<0>(address),
-              std::get<1>(address),
-              std::get<2>(address),
-              std::get<3>(address),
-              std::get<4>(address),
-              std::get<5>(address),
-              std::get<6>(address),
-              std::get<7>(address)
-            };
-            _deviceTemperatures[address] = _inputs.getTempC(addressA) + tempOffset;
+          for (auto const& pair : _deviceTemperatureOffsets) {
+            uint64_t owAddress = pair.first;
+            float offset = pair.second;
+            DeviceAddress dAddress;
+            intToDeviceAddress(owAddress, dAddress);
+            _deviceTemperatures[owAddress] = _inputs.getTempC(dAddress) + offset;
           }
           // Set up for next run.
           _inputs.requestTemperatures();
         }
       ))
     {
-      auto oneWire = OneWire(dataPin);
-      _inputs = DallasTemperature(&oneWire);
+      // First, find out what devices are on the bus.
+      OneWire bus = OneWire(dataPin);
+      uint8_t dAddress[8];
+      while (bus.search(dAddress)) {
+        uint64_t owAddress = deviceAddressToInt(dAddress);
+        if (_deviceTemperatureOffsets.find(owAddress) == _deviceTemperatureOffsets.end()) {
+          // No temp offset specified, and no awareness of this address.
+          // (The the role of the map of offsets is overloaded with keeping track of what devices are on the bus.)
+          // Add it to the map with a zero offset.
+          _deviceTemperatureOffsets[owAddress] = 0.0;
+        }
+      }
+
+      _inputs = DallasTemperature(&bus);
+      _inputs.setResolution(resolution);
+      // Set up in sync mode for first run.
+      _inputs.setWaitForConversion(true);
+      _inputs.requestTemperatures();
+      // Set up in async mode for subsequent runs.
+      _inputs.setWaitForConversion(false);
     }
 
-    std::optional<float> readChannel(const OneWireAddress address) {
-      _timer.run();
+    std::optional<float> readChannel(uint64_t address) {
+      _timer.tick();
       return _deviceTemperatures.at(address);
     }
 };
@@ -333,7 +193,7 @@ enum class Sht21Channel {
   humidity
 };
 
-class Sht21 : MultiInput<Sht21Channel, float> {
+class Sht21 : public MultiInput<Sht21Channel, float> {
   private:
     SHT21 _input;
     float _tempOffset;
@@ -369,6 +229,8 @@ class Sht21 : MultiInput<Sht21Channel, float> {
               _input.requestHumidity();
               _mode = 2;
               return _lastReadHum;
+            // Unreachable; doing it to shut the compiler up.
+            default: return std::nullopt;
           }
         case 1:
           // Temp has been requested and we're currently polling for it.
@@ -384,6 +246,7 @@ class Sht21 : MultiInput<Sht21Channel, float> {
             case Sht21Channel::humidity:
               // not currently polling for humidity; just return the last known value.
               return _lastReadHum;
+            default: return std::nullopt;
           }
         case 2:
           switch (channel) {
@@ -395,7 +258,9 @@ class Sht21 : MultiInput<Sht21Channel, float> {
               return _lastReadHum;
             case Sht21Channel::tempC:
               return _lastReadTemp;
+            default: return std::nullopt;
           }
+        default: return std::nullopt;
       }
     }
 };
@@ -406,7 +271,7 @@ enum class Bme280Channel {
   pressureKpa
 };
 
-class Bme280 : MultiInput<Bme280Channel, float> {
+class Bme280 : public MultiInput<Bme280Channel, float> {
   private:
     BME280_DEV _input;
     float _tempOffset;
@@ -452,19 +317,19 @@ class Bme280 : MultiInput<Bme280Channel, float> {
     }
 };
 
-class Bh1750 : Input<float> {
+class Bh1750 : public Input<float> {
   private:
     BH1750 _lightMeter;
-    AsyncTimer _sampleInterval;
+    RepeatTimer _timer;
     std::optional<float> _lastReadValue;
 
   public:
     Bh1750(uint8_t address, unsigned long sampleInterval)
     :
       _lightMeter(BH1750(address)),
-      _sampleInterval(AsyncTimer(
+      _timer(RepeatTimer(
+        millis(),
         sampleInterval,
-        0,
         [this]() {
           if (_lightMeter.measurementReady()) {
             _lastReadValue = _lightMeter.readLightLevel();
@@ -478,18 +343,18 @@ class Bh1750 : Input<float> {
     }
 
     std::optional<float> read() {
+      _timer.tick();
       return _lastReadValue;
     }
 };
 
-class OnePinInput : Input<bool> {
+class DigitalPinInput : public Input<bool> {
   private:
     uint8_t _pin;
     bool _onState;
-    unsigned long _debounceInterval;
   
   public:
-    OnePinInput(uint8_t pin, uint8_t mode, unsigned long debounceInterval = 0)
+    DigitalPinInput(uint8_t pin, uint8_t mode)
     :
       _pin(pin),
       _onState(mode == INPUT_PULLDOWN)
@@ -500,6 +365,33 @@ class OnePinInput : Input<bool> {
     std::optional<bool> read() {
       bool pinState = digitalRead(_pin);
       return _onState ? pinState : !pinState;
+    }
+};
+
+class AnalogPinInput : public Input<float> {
+  private:
+    uint8_t _pin;
+    static uint8_t _resolution;
+    static bool _resolutionSetOnce;
+
+  public:
+    AnalogPinInput(uint8_t pin)
+    : _pin(pin)
+    {
+      if (!_resolutionSetOnce) {
+        setResolution(10);
+        _resolutionSetOnce = true;
+      }
+    }
+
+    std::optional<float> read() {
+      return (float)analogRead(_pin) / (2 ^ _resolution - 1);
+    }
+
+    static void setResolution(uint8_t resolution) {
+      _resolution = resolution;
+      _resolutionSetOnce = true;
+      analogReadResolution(resolution);
     }
 };
 
