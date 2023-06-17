@@ -40,9 +40,9 @@
 #define VENTS_SENSOR_PIN 0
 
 const TwilioConfig twilioConfig{
-  "accountId",
-  "authToken",
-  "sender",
+  "AC5c37778624f35d8c4f508e5fdab8dca0",
+  "f03924deb2ce3b47adcade52ac61ebca",
+  "+13158126320",
   "+12504865323"
 };
 // Every ten minutes seems good.

@@ -89,7 +89,7 @@ class PointerInput : public Input<TVal> {
 
 // A simple input whose value can be set.
 template <typename TVal>
-class SettableInput : public Input<TVal> {
+class StateInput : public Input<TVal> {
   private:
     std::optional<TVal> _value;
 
@@ -126,7 +126,7 @@ class Ds18b20 : public MultiInput<uint64_t, float> {
   private:
     DallasTemperature _inputs;
     std::vector<uint64_t> _deviceAddresses;
-    std::map<uint64_t, float> _deviceTemperatures;
+    std::map<uint64_t, std::optional<float>> _deviceTemperatures;
     std::map<uint64_t, float> _deviceTemperatureOffsets;
     RepeatTimer _timer;
 
@@ -150,10 +150,17 @@ class Ds18b20 : public MultiInput<uint64_t, float> {
         [this, resolution]() {
           for (auto const& pair : _deviceTemperatureOffsets) {
             uint64_t owAddress = pair.first;
-            float offset = pair.second;
             DeviceAddress dAddress;
             intToDeviceAddress(owAddress, dAddress);
-            _deviceTemperatures[owAddress] = _inputs.getTempC(dAddress) + offset;
+            // FIXME: what happens when the device doesn't exist on the bus?
+            // Quite likely situation, given my skill cnnecting things together reliably.
+            float tempC = _inputs.getTempC(dAddress);
+            if (tempC == DEVICE_DISCONNECTED_C) {
+              _deviceTemperatures[owAddress] = std::nullopt;
+            } else {
+              float offset = pair.second;
+              _deviceTemperatures[owAddress] = tempC + offset;
+            }
           }
           // Set up for next run.
           _inputs.requestTemperatures();
