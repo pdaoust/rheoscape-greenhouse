@@ -1,5 +1,5 @@
-#ifndef PAULDAOUST_OUTPUT_H
-#define PAULDAOUST_OUTPUT_H
+#ifndef RHEOSCAPE_OUTPUT_H
+#define RHEOSCAPE_OUTPUT_H
 
 #include <optional>
 #include <Arduino.h>

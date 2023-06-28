@@ -1,5 +1,5 @@
-#ifndef PAULDAOUST_EVENT_STREAM_H
-#define PAULDAOUST_EVENT_STREAM_H
+#ifndef RHEOSCAPE_EVENT_STREAM_H
+#define RHEOSCAPE_EVENT_STREAM_H
 
 #include <map>
 #include <optional>

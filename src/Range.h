@@ -1,5 +1,5 @@
-#ifndef PAULDAOUST_RANGE_H
-#define PAULDAOUST_RANGE_H
+#ifndef RHEOSCAPE_RANGE_H
+#define RHEOSCAPE_RANGE_H
 
 template <typename T>
 struct Range {

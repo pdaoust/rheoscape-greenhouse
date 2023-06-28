@@ -1,5 +1,5 @@
-#ifndef PAULDAOUST_RUNNABLE_H
-#define PAULDAOUST_RUNNABLE_H
+#ifndef RHEOSCAPE_RUNNABLE_H
+#define RHEOSCAPE_RUNNABLE_H
 
 #include <vector>
 #include <Timer.h>

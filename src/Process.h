@@ -1,5 +1,5 @@
-#ifndef PAULDAOUST_PROCESS_H
-#define PAULDAOUST_PROCESS_H
+#ifndef RHEOSCAPE_PROCESS_H
+#define RHEOSCAPE_PROCESS_H
 
 #include <optional>
 #include <Input.h>

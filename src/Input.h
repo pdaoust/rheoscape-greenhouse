@@ -1,5 +1,5 @@
-#ifndef PAULDAOUST_INPUT_H
-#define PAULDAOUST_INPUT_H
+#ifndef RHEOSCAPE_INPUT_H
+#define RHEOSCAPE_INPUT_H
 
 #include <Arduino.h>
 #include <Timer.h>

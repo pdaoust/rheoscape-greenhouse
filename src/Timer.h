@@ -1,5 +1,5 @@
-#ifndef PAULDAOUST_TIMER_H
-#define PAULDAOUST_TIMER_H
+#ifndef RHEOSCAPE_TIMER_H
+#define RHEOSCAPE_TIMER_H
 
 #include <Arduino.h>
 

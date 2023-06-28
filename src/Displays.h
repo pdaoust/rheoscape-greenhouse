@@ -1,5 +1,5 @@
-#ifndef PAULDAOUST_DISPLAYS_H
-#define PAULDAOUST_DISPLAYS_H
+#ifndef RHEOSCAPE_DISPLAYS_H
+#define RHEOSCAPE_DISPLAYS_H
 
 #include <string>
 #include <sstream>
