@@ -1,5 +1,5 @@
-#ifndef RHEOSCAPE_EVENT_STREAM_H
-#define RHEOSCAPE_EVENT_STREAM_H
+#ifndef RHEOSCAPE_STATE_MACHINE_H
+#define RHEOSCAPE_STATE_MACHINE_H
 
 #include <map>
 #include <optional>
