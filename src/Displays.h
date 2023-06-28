@@ -294,7 +294,7 @@ struct Bitmap {
 template <uint16_t W, uint16_t H, typename TData, typename TBitmap>
 struct SizedBitmap : TBitmap {
   SizedBitmap(const TData* data, const std::optional<uint8_t*> mask = std::nullopt)
-  : TBitmap(data, Coords(W, H), mask)
+  : TBitmap(data, Coords{W, H}, mask)
   { }
 
   SizedBitmap(TBitmap unsized)
@@ -302,19 +302,10 @@ struct SizedBitmap : TBitmap {
   { }
 };
 
-struct Bitmap1 : Bitmap<uint8_t> {
+struct Bitmap1 : public Bitmap<uint8_t> {
   Bitmap1(const uint8_t* data, const Coords dimensions, const std::optional<uint8_t*> mask = std::nullopt)
   : Bitmap<uint8_t>(data, dimensions, mask)
   { }
-
-  ColouredBitmap1 withColours(FgBgColour colours) {
-    return ColouredBitmap1(
-      data,
-      dimensions,
-      colours,
-      mask
-    );
-  }
 };
 
 template <uint16_t W, uint16_t H>
@@ -325,7 +316,7 @@ using Bitmap16 = Bitmap<uint16_t>;
 template <uint16_t W, uint16_t H>
 using SizedBitmap16 = SizedBitmap<W, H, uint16_t, Bitmap16>;
 
-struct ColouredBitmap1 : Bitmap1 {
+struct ColouredBitmap1 : public Bitmap1 {
   const FgBgColour colours;
 
   ColouredBitmap1(const uint8_t* data, const Coords dimensions, const FgBgColour colours, const std::optional<uint8_t*> mask = std::nullopt)
@@ -333,21 +324,22 @@ struct ColouredBitmap1 : Bitmap1 {
     Bitmap1(data, dimensions, mask),
     colours(colours)
   { }
+
+  static ColouredBitmap1 fromBitmap1(Bitmap1 bitmap, FgBgColour colours) {
+    return ColouredBitmap1(
+      bitmap.data,
+      bitmap.dimensions,
+      colours,
+      bitmap.mask
+    );
+  }
 };
 
 template <uint16_t W, uint16_t H>
-struct SizedColouredBitmap1 : SizedBitmap<W, H, uint8_t, ColouredBitmap1> {
+struct SizedColouredBitmap1 : public SizedBitmap<W, H, uint8_t, ColouredBitmap1> {
   SizedColouredBitmap1(const uint8_t* data, const FgBgColour colours, const std::optional<uint8_t*> mask = std::nullopt)
-  : ColouredBitmap1(data, Coords(W, H), colours, mask)
+  : ColouredBitmap1(data, Coords{W, H}, colours, mask)
   { }
-
-  SizedColouredBitmap1<W, H> withColours(FgBgColour colours) {
-    return SizedColouredBitmap1<W, H>(
-      data,
-      colours,
-      mask
-    );
-  }
 };
 
 // TODO: I don't like how this can allow full-colour styled bitmaps.
@@ -375,8 +367,8 @@ typedef PositionedBitmap<DisplayBitmapMonochrome> PositionedBitmapMonochrome;
 typedef PositionedBitmap<DisplayBitmapColour> PositionedBitmapColour;
 
 class BitmapDrawingHelper {
-  public:
-    static void drawBitmapWithoutMask(Adafruit_GFX* driver, Coords topLeft, Bitmap1 bitmap) {
+  private:
+    static void _drawBitmapWithoutMask(Adafruit_GFX* driver, Coords topLeft, Bitmap1 bitmap) {
       driver->drawBitmap(
         topLeft.x,
         topLeft.y,
@@ -392,7 +384,7 @@ class BitmapDrawingHelper {
     }
 
     // Helper method to draw a styled bitmap, which is the same for all bit-depth displays.
-    static void drawBitmapWithoutMask(Adafruit_GFX* driver, Coords topLeft, ColouredBitmap1 bitmap) {
+    static void _drawBitmapWithoutMask(Adafruit_GFX* driver, Coords topLeft, ColouredBitmap1 bitmap) {
       if (bitmap.colours.bgColour.has_value()) {
         driver->drawBitmap(
           topLeft.x,
@@ -416,7 +408,7 @@ class BitmapDrawingHelper {
       }
     }
 
-    static void drawBitmapWithoutMask(Adafruit_GFX* driver, Coords topLeft, Bitmap16 bitmap) {
+    static void _drawBitmapWithoutMask(Adafruit_GFX* driver, Coords topLeft, Bitmap16 bitmap) {
       driver->drawRGBBitmap(
         topLeft.x,
         topLeft.y,
@@ -427,17 +419,17 @@ class BitmapDrawingHelper {
     }
 
     template <typename TBitmap>
-    static void drawBitmapWithMask(Adafruit_GFX* driver, Coords topLeft, TBitmap bitmap) {
+    static void _drawBitmapWithMask(Adafruit_GFX* driver, Coords topLeft, TBitmap bitmap) {
       // Regrdless of the bit depth of the underlying driver or the bitmap to be drawn,
       // draw the maskless bitmap onto a colour canvas.
       // This is because the only bitmap that can have a mask is a colour one.
       GFXcanvas16 colourCanvas(bitmap.dimensions.x, bitmap.dimensions.y);
-      drawBitmapWithoutMask(colourCanvas, bitmap);
+      _drawBitmapWithoutMask(&colourCanvas, Coords{0, 0}, bitmap);
 
       // Once we've done that, draw it to the driver with the mask.
       // If the bitmap is monochrome and the driver is monochrome,
       // 0xFFFF will get turned into 1.
-      driver.drawRGBBitmap(
+      driver->drawRGBBitmap(
         topLeft.x,
         topLeft.y,
         colourCanvas.getBuffer(),
@@ -447,18 +439,20 @@ class BitmapDrawingHelper {
       );
     }
 
+  public:
     template <typename TBitmap>
     static void drawBitmap(Adafruit_GFX* driver, Coords topLeft, TBitmap bitmap) {
       if (bitmap.mask.has_value()) {
-        drawBitmapWithMask(driver, bitmap);
+        _drawBitmapWithMask<TBitmap>(driver, topLeft, bitmap);
       } else {
-        drawBitmapWithoutMask(driver, bitmap);
+        _drawBitmapWithoutMask(driver, topLeft, bitmap);
       }
     }
 
     static void drawBitmap(Adafruit_GFX* driver, Coords topLeft, DisplayBitmapMonochrome bitmap) {
       if (std::holds_alternative<Bitmap1>(bitmap)) {
-        drawBitmap(driver, topLeft, std::get<Bitmap1>(bitmap));
+        Bitmap1 inner = std::get<Bitmap1>(bitmap);
+        drawBitmap(driver, topLeft, inner);
       } else {
         drawBitmap(driver, topLeft, std::get<ColouredBitmap1>(bitmap));
       }
@@ -473,7 +467,7 @@ class BitmapDrawingHelper {
     }
 };
 
-template <typename TGfxCanvas, typename TBitmapOut, uint8_t TBitDepth>
+template <typename TGfxCanvas, typename TBitmapOut, BitDepth BitDepth>
 class Canvas {
   private:
     TGfxCanvas _gfxCanvas;
@@ -502,7 +496,7 @@ class Canvas {
 
     // My idiomatic versions of all the GFX primitives.
     void drawPixel(Coords coords, Colour colour) {
-      _gfxCanvas.drawPixel(coords.x, coords.y, colour.toDisplayBitDepth(TBitDepth));
+      _gfxCanvas.drawPixel(coords.x, coords.y, colour.toDisplayBitDepth(BitDepth));
     }
 
     void setRotation(Rotation rotation) {
@@ -518,51 +512,51 @@ class Canvas {
     }
 
     void drawFastVLine(Coords topLeft, int16_t height, Colour colour) {
-      _gfxCanvas.drawFastVLine(origin.x, origin.y, height, colour.toDisplayBitDepth(TBitDepth));
+      _gfxCanvas.drawFastVLine(topLeft.x, topLeft.y, height, colour.toDisplayBitDepth(BitDepth));
     }
 
-    void drawFastHLine(Coords origin, int16_t length, Colour colour) {
-      _gfxCanvas.drawFastHLine(origin.x, origin.y, length, colour.toDisplayBitDepth(TBitDepth));
+    void drawFastHLine(Coords topLeft, int16_t length, Colour colour) {
+      _gfxCanvas.drawFastHLine(topLeft.x, topLeft.y, length, colour.toDisplayBitDepth(BitDepth));
     }
 
     void fillRect(Coords corner1, Coords corner2, Colour colour) {
-      _gfxCanvas.fillRect(corner1.x, corner1.y, corner2.x - corner1.x, corner2.y - corner1.y, colour.toDisplayBitDepth(TBitDepth));
+      _gfxCanvas.fillRect(corner1.x, corner1.y, corner2.x - corner1.x, corner2.y - corner1.y, colour.toDisplayBitDepth(BitDepth));
     }
 
     void fillScreen(Colour colour) {
-      _gfxCanvas.fillScreen(colour.toDisplayBitDepth(TBitDepth));
+      _gfxCanvas.fillScreen(colour.toDisplayBitDepth(BitDepth));
     }
 
     void drawLine(Coords start, Coords end, Colour colour) {
-      _gfxCanvas.drawLine(start.x, start.y, end.x - start.x, end.y - start.y, colour.toDisplayBitDepth(TBitDepth));
+      _gfxCanvas.drawLine(start.x, start.y, end.x - start.x, end.y - start.y, colour.toDisplayBitDepth(BitDepth));
     }
 
     void drawRect(Coords corner1, Coords corner2, Colour colour) {
-      _gfxCanvas.drawRect(corner1.x, corner1.y, corner2.x - corner1.x, corner2.y - corner1.y, colour.toDisplayBitDepth(TBitDepth));
+      _gfxCanvas.drawRect(corner1.x, corner1.y, corner2.x - corner1.x, corner2.y - corner1.y, colour.toDisplayBitDepth(BitDepth));
     }
 
     void drawCircle(Coords centre, int16_t radius, Colour colour) {
-      _gfxCanvas.drawCircle(centre.x, centre.y, radius, colour.toDisplayBitDepth(TBitDepth));
+      _gfxCanvas.drawCircle(centre.x, centre.y, radius, colour.toDisplayBitDepth(BitDepth));
     }
 
     void fillCircle(Coords centre, int16_t radius, Colour colour) {
-      _gfxCanvas.fillCircle(centre.x, centre.y, radius, colour.toDisplayBitDepth(TBitDepth));
+      _gfxCanvas.fillCircle(centre.x, centre.y, radius, colour.toDisplayBitDepth(BitDepth));
     }
 
     void drawTriangle(Coords point1, Coords point2, Coords point3, Colour colour) {
-      _gfxCanvas.drawTriangle(point1.x, point1.y, point2.x, point2.y, point3.x, point3.y, colour.toDisplayBitDepth(TBitDepth));
+      _gfxCanvas.drawTriangle(point1.x, point1.y, point2.x, point2.y, point3.x, point3.y, colour.toDisplayBitDepth(BitDepth));
     }
 
     void fillTriangle(Coords point1, Coords point2, Coords point3, Colour colour) {
-      _gfxCanvas.fillTriangle(point1.x, point1.y, point2.x, point2.y, point3.x, point3.y, colour.toDisplayBitDepth(TBitDepth));
+      _gfxCanvas.fillTriangle(point1.x, point1.y, point2.x, point2.y, point3.x, point3.y, colour.toDisplayBitDepth(BitDepth));
     }
 
     void drawRoundRect(Coords corner1, Coords corner2, int16_t radius, Colour colour) {
-      _gfxCanvas.drawRoundRect(corner1.x, corner1.y, corner2.x - corner1.x, corner2.y - corner1.y, radius, colour.toDisplayBitDepth(TBitDepth));
+      _gfxCanvas.drawRoundRect(corner1.x, corner1.y, corner2.x - corner1.x, corner2.y - corner1.y, radius, colour.toDisplayBitDepth(BitDepth));
     }
 
     void fillRoundRect(Coords corner1, Coords corner2, int16_t radius, Colour colour) {
-      _gfxCanvas.fillRoundRect(corner1.x, corner1.y, corner2.x - corner1.x, corner2.y - corner1.y, radius, colour.toDisplayBitDepth(TBitDepth));
+      _gfxCanvas.fillRoundRect(corner1.x, corner1.y, corner2.x - corner1.x, corner2.y - corner1.y, radius, colour.toDisplayBitDepth(BitDepth));
     }
 
     void drawText(Coords topLeft, BoxedText text) {
@@ -580,7 +574,7 @@ class Canvas {
       canvas.setTextSize(text.fontSize);
 
       // Now output the text!
-      canvas.print(text.formatTextWithClipAndAlignment());
+      canvas.print(text.formatTextWithClipAndAlignment().c_str());
 
       _gfxCanvas.drawBitmap(
         topLeft.x,
@@ -588,7 +582,9 @@ class Canvas {
         canvas.getBuffer(),
         canvas.width(),
         canvas.height(),
-        text.colour.toDisplayBitDepth(TBitDepth)
+        // Every display I've seen so far is 16-bit only, so this should work.
+        // FIXME: If I start using 24-bit colours, I'll have to revise this.
+        text.colour.toDisplayBitDepth(BitDepth).to16Bit()
         // Never specify the background colour;
         // text is always transparent on its background.
         // The only value of specifying a background (that I can see)
@@ -598,18 +594,18 @@ class Canvas {
 
     template <typename TBitmapIn>
     void drawBitmap(Coords topLeft, TBitmapIn bitmap) {
-      BitmapDrawingHelper::drawBitmap(_getGfxCanvas(), bitmap);
+      BitmapDrawingHelper::drawBitmap(_getGfxCanvas(), topLeft, bitmap);
     }
 };
 
-class Canvas1 : public Canvas<GFXcanvas1, Bitmap1, 1> {
+class Canvas1 : public Canvas<GFXcanvas1, Bitmap1, one> {
   public:
-    Canvas1(const Coords dimensions) : Canvas<GFXcanvas1, Bitmap1, 1>(GFXcanvas1(dimensions.x, dimensions.y)) { }
+    Canvas1(const Coords dimensions) : Canvas<GFXcanvas1, Bitmap1, one>(GFXcanvas1(dimensions.x, dimensions.y)) { }
 };
 
-class Canvas16 : Canvas<GFXcanvas16, Bitmap16, 16> {
+class Canvas16 : Canvas<GFXcanvas16, Bitmap16, sixteen> {
   public:
-    Canvas16(const Coords dimensions) : Canvas<GFXcanvas16, Bitmap16, 16>(GFXcanvas16(dimensions.x, dimensions.y)) { }
+    Canvas16(const Coords dimensions) : Canvas<GFXcanvas16, Bitmap16, sixteen>(GFXcanvas16(dimensions.x, dimensions.y)) { }
 };
 
 template <typename TDriver, typename TBitmap>
@@ -639,7 +635,7 @@ class AdafruitGfxDisplay : protected BitmapDrawingHelper, public Runnable {
         return;
       }
 
-      BitmapDrawingHelper::drawBitmap(_driver, Coords(0, 0), bitmap.value());
+      BitmapDrawingHelper::drawBitmap(_driver, Coords{0, 0}, bitmap.value());
     }
 };
 
@@ -783,8 +779,8 @@ class TextDisplayWidget : public Input<ColouredBitmap1> {
 
       BoxedText full = _textTemplate.copyWith(std::get<0>(textAndColour.value()));
       Canvas1 canvas(full.getBoxDimensions());
-      canvas.drawText(Coords(0, 0), full);
-      return canvas.getBitmap().withColours(FgBgColour(std::get<1>(textAndColour.value())));
+      canvas.drawText(Coords{0, 0}, full);
+      return ColouredBitmap1::fromBitmap1(canvas.getBitmap(), FgBgColour(std::get<1>(textAndColour.value())));
     }
 };
 
@@ -801,12 +797,12 @@ class Label : public TextDisplayWidget {
       TextDisplayWidget(
         ConstantInput<std::string>(text),
         ConstantInput<Colour>(colour),
-        Coords(
+        Coords{
           // If not given a space to fill, default to the size of the text.
           length.value_or(text.size()),
           // Labels are always one row tall. Sorry, but that's just the way it is.
           1
-        ),
+        },
         fontSize,
         alignment
       )
@@ -816,12 +812,12 @@ class Label : public TextDisplayWidget {
 template <typename T>
 std::string formatNumber(T value, uint8_t base, uint8_t precision) {
   std::stringstream text;
-  text << std::setbase(_base) << std::setprecision(_precision) << value.value() << std::endl;
+  text << std::setbase(base) << std::setprecision(precision) << value << std::endl;
   return text.str();
 };
 
 template <typename T>
-class NumberToStringProcess :npublic TranslatingNotEmptyProcess<T, std::string> {
+class NumberToStringProcess : public TranslatingNotEmptyProcess<T, std::string> {
   public:
     NumberToStringProcess(Input<T> wrappedInput, uint8_t base, uint8_t precision)
     :
@@ -838,11 +834,11 @@ template <typename T>
 class NumberToStringProcessWithColours : public TranslatingNotEmptyProcess<T, std::tuple<std::string, Colour>> {
   private:
     std::map<T, Colour> _initializerListToBreakpointsMap(std::initializer_list<std::tuple<T, Colour>> breakpoints) {
-      std::map<T, Colour> breakpoints;
+      std::map<T, Colour> breakpointsMap;
       for (auto i : breakpoints) {
-        breakpoints[std::get<0>(i)] = std::get<1>(i);
+        breakpointsMap[std::get<0>(i)] = std::get<1>(i);
       }
-      return breakpoints;
+      return breakpointsMap;
     }
 
   public:
@@ -896,7 +892,7 @@ class BitmapBoxingProcess : public Input<Bitmap16> {
     { }
 
     BitmapBoxingProcess(Input<TBitmapIn> bitmapInput, Input<FgBgColour> coloursInput, uint8_t cornerRadius, Margins padding)
-    : BitmapBoxingProcess(Merging2NotEmptyProcess<TBitmapIn, FgBgColour>(bitmapInput, FgBgColour), cornerRadius, padding)
+    : BitmapBoxingProcess(Merging2NotEmptyProcess<TBitmapIn, FgBgColour>(bitmapInput, coloursInput), cornerRadius, padding)
     { }
 
     std::optional<Bitmap16> read() {
@@ -914,14 +910,14 @@ class BitmapBoxingProcess : public Input<Bitmap16> {
       };
 
       Canvas16 image(outerDimensions);
-      image.fillRoundRect(Coords(0, 0), outerDimensions, _radius, colours.fgColour);
+      image.fillRoundRect(Coords{0, 0}, outerDimensions, _cornerRadius, colours.fgColour);
       if (colours.bgColour.has_value()) {
-        image.drawRoundRect(Cords(0, 0), outerDimensions, _radius, colours.bgColour.value());
+        image.drawRoundRect(Coords{0, 0}, outerDimensions, _cornerRadius, colours.bgColour.value());
       }
       image.drawBitmap<TBitmapIn>(bitmap);
 
       Canvas1 mask(outerDimensions);
-      mask.fillRoundRect(Coords(0, 0), outerDimensions, _radius, Colour(true));
+      mask.fillRoundRect(Coords{0, 0}, outerDimensions, _cornerRadius, Colour(true));
 
       Bitmap16 imageBitmap = image.getBitmap();
       Bitmap1 maskBitmap = mask.getBitmap();
@@ -964,34 +960,34 @@ class BitmapPositioningProcess : public TranslatingNotEmptyProcess<std::tuple<TD
 };
 
 template <typename TDisplayBitmapIn, typename TSizedBitmapOut, typename TCanvas, uint16_t W, uint16_t H>
-class CompositorProcess : public Input<TSizedBitmapOut<W, H>> {
+class CompositorProcess : public Input<TSizedBitmapOut> {
   private:
-    std::vec<Input<PositionedBitmap<TDisplayBitmapIn>>> _inputs;
+    std::vector<Input<PositionedBitmap<TDisplayBitmapIn>>> _inputs;
 
   public:
-    CompositorProcess(std::vec<Input<PositionedBitmap<TDisplayBitmapIn>>> inputs)
+    CompositorProcess(std::vector<Input<PositionedBitmap<TDisplayBitmapIn>>> inputs)
     : _inputs(inputs)
     { }
 
-    std::optional<TSizedBitmapOut<W, H>> read() {
+    std::optional<TSizedBitmapOut> read() {
       TCanvas canvas(W, H);
 
       for (auto input : _inputs) {
-        std::optional<TPositionedBitmapIn<TDisplayBitmapIn>> value = _input.read();
+        std::optional<PositionedBitmap<TDisplayBitmapIn>> value = input.read();
         if (value.has_value()) {
-          canvas.drawBitmap<TDisplayBitmapIn>(value.value().bitmap, value.value().topLeft);
+//          canvas.drawBitmap<TDisplayBitmapIn>(value.value().bitmap, value.value().topLeft);
         }
       }
 
-      return SizedBitmap<W, H>(canvas.getBitmap());
+      return TSizedBitmapOut(canvas.getBitmap());
     }
 };
 
 template <uint16_t W, uint16_t H>
-using MonochromeCompositorProcess = CompositorProcess<DisplayBitmapMonochrome, SizedBitmap1, Canvas1, W, H>;
+using MonochromeCompositorProcess = CompositorProcess<DisplayBitmapMonochrome, SizedBitmap1<W, H>, Canvas1, W, H>;
 
 template <uint16_t W, uint16_t H>
-using ColourCompositorProcess = CompositorProcess<DisplayBitmapColour, SizedBitmap16, Canvas16, W, H>;
+using ColourCompositorProcess = CompositorProcess<DisplayBitmapColour, SizedBitmap16<W, H>, Canvas16, W, H>;
 
 using Ssd1306CompositorProcess_0_49_inches_landscape = MonochromeCompositorProcess<64, 32>;
 using Ssd1306CompositorProcess_0_96_inches_landscape = MonochromeCompositorProcess<128, 64>;

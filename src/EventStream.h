@@ -17,7 +17,7 @@ struct Event {
 template <typename T>
 class EventStream {
   private:
-    std::vector<const std::function<void(Event<T>)>&> _subscribers;
+    std::vector<std::function<void(Event<T>)>> _subscribers;
 
   protected:
     void _emit(Event<T> event) {
@@ -34,7 +34,7 @@ class EventStream {
     }
 
   public:
-    void registerSubscriber(const std::function<void(Event<T>)&> subscriber) {
+    void registerSubscriber(std::function<void(Event<T>)> subscriber) {
       _subscribers.push_back(subscriber);
     }
 };
@@ -65,16 +65,16 @@ class EventStreamFilter : public EventStream<T> {
     const std::function<bool(T)>& _filter;
 
   public:
-    EventStreamFilter(EventStream<T> wrappedEventStream, const std::function<bool(T)>& filter)
-    : _filter(filter)
-    {
-      wrappedEventStream.registerSubscriber(receiveEvent);
-    }
-
     void receiveEvent(Event<T> event) {
       if (_filter(event.value)) {
         _emit(event);
       }
+    }
+
+    EventStreamFilter(EventStream<T> wrappedEventStream, const std::function<bool(T)>& filter)
+    : _filter(filter)
+    {
+      wrappedEventStream.registerSubscriber([this](Event<T> v) { this->receiveEvent(v); });
     }
 };
 
@@ -87,20 +87,20 @@ class EventStreamTranslator : public EventStream<TOut> {
     EventStreamTranslator(EventStream<TIn> wrappedEventStream, const std::function<TOut(TIn)>& translator)
     : _translator(translator)
     {
-      wrappedEventStream.registerSubscriber(receiveEvent);
+      wrappedEventStream.registerSubscriber([this](Event<TIn> v) { this->receiveEvent(v); });
     }
 
     void receiveEvent(Event<TIn> event) {
       TOut translated = _translator(event.value);
-      return Event<TOut>{
+      _emit(Event<TOut>{
         event.timestamp,
         translated
-      };
+      });
     }
 };
 
 template <typename T>
-class EventStreamNotEmpty : public EventStreamTranslator<T> {
+class EventStreamNotEmpty : public EventStreamTranslator<std::optional<T>, T> {
   public:
     EventStreamNotEmpty(EventStream<std::optional<T>> wrappedEventStream)
     :
@@ -119,7 +119,7 @@ class EventStreamNotEmpty : public EventStreamTranslator<T> {
 };
 
 template <typename T>
-class InputToEventStreamNotEmpty : public EventStreamNotEmpty, public Runnable {
+class InputToEventStreamNotEmpty : public EventStreamNotEmpty<T>, public Runnable {
   private:
     Input<T> _wrappedInput;
 
@@ -127,8 +127,8 @@ class InputToEventStreamNotEmpty : public EventStreamNotEmpty, public Runnable {
     InputToEventStreamNotEmpty(Input<T> wrappedInput, Runner runner)
     :
       Runnable(runner),
-      EventStreamNotEmpty(
-        InputToEventStream(wrappedInput)
+      EventStreamNotEmpty<T>(
+        InputToEventStream<T>(wrappedInput)
       )
     { }
 
@@ -150,7 +150,7 @@ class EventStreamDebouncer : public EventStream<T>, public Runnable {
       _delay(delay),
       _previousEvent(std::nullopt)
     {
-      wrappedEventStream.registerSubscriber(receiveEvent);
+      wrappedEventStream.registerSubscriber([this](Event<T> v) { this->receiveEvent(v); });
     }
 
     void receiveEvent(Event<T> event) {
@@ -175,20 +175,19 @@ class EventStreamDebouncer : public EventStream<T>, public Runnable {
 };
 
 enum FancyPushbuttonEvent {
-  down,
-  up,
-  press,
-  longPress,
+  button_down,
+  button_up,
+  button_press,
+  button_longPress,
   // The button has been held for more than a short press period.
   // We're now into long press territory.
-  holdStart,
-  holdRepeatPress,
-  holdDone
+  button_holdStart,
+  button_holdRepeatPress,
+  button_holdDone
 };
 
 class FancyPushbutton : public EventStream<FancyPushbuttonEvent>, public Runnable {
   private:
-    EventStream<bool> _wrappedEventStream;
     const uint16_t _shortPressTime;
     const uint16_t _longPressTime;
     const uint16_t _repeatInterval;
@@ -198,27 +197,28 @@ class FancyPushbutton : public EventStream<FancyPushbuttonEvent>, public Runnabl
   public:
     FancyPushbutton(
       EventStream<bool> wrappedEventStream,
+      Runner runner,
       // If a press is as long as this or shorter, it'll be considered a short press.
       uint16_t shortPressTime = 200,
       // If a press is longer than a short press, but as long as this or shorter, it'll be considered a long press.
       uint16_t holdTime = 400,
       // Any press longer than a long press will emit press events at this interval.
-      uint16_t repeatInterval = 200,
-      Runner runner
+      uint16_t repeatInterval = 200
     ) :
       Runnable(runner),
-      _wrappedEventStream(wrappedEventStream),
       _shortPressTime(shortPressTime),
       _longPressTime(holdTime),
       _repeatInterval(repeatInterval)
-    { }
-
+    {
+      wrappedEventStream.registerSubscriber([this](Event<bool> v) { this->receiveEvent(v); });
+    }
+  
     void receiveEvent(Event<bool> event) {
       if (event.value && (!_lastEventReceived.has_value() || !_lastEventReceived.value().value)) {
         // Last event seen was false and the new one is true; transition to down.
         _lastEventEmitted = Event<FancyPushbuttonEvent>{
           millis(),
-          down
+          button_down
         };
         _emit(_lastEventEmitted.value());
       } else if (!event.value && _lastEventReceived.has_value() && _lastEventReceived.value().value) {
@@ -232,25 +232,25 @@ class FancyPushbutton : public EventStream<FancyPushbuttonEvent>, public Runnabl
         FancyPushbuttonEvent lastPushbuttonEventEmitted = _lastEventEmitted.value().value;
         unsigned long now = millis();
         switch (lastPushbuttonEventEmitted) {
-          case down:
-            _emit(Event<FancyPushbuttonEvent>{now, press});
-            _emit(Event<FancyPushbuttonEvent>{now, up});
+          case button_down:
+            _emit(Event<FancyPushbuttonEvent>{now, button_press});
+            _emit(Event<FancyPushbuttonEvent>{now, button_up});
             break;
-          case holdStart:
-            _emit(Event<FancyPushbuttonEvent>{now, longPress});
-            _emit(Event<FancyPushbuttonEvent>{now, holdDone});
-            _emit(Event<FancyPushbuttonEvent>{now, up});
+          case button_holdStart:
+            _emit(Event<FancyPushbuttonEvent>{now, button_longPress});
+            _emit(Event<FancyPushbuttonEvent>{now, button_holdDone});
+            _emit(Event<FancyPushbuttonEvent>{now, button_up});
             break;
-          case holdRepeatPress:
-            _emit(Event<FancyPushbuttonEvent>{now, holdDone});
-            _emit(Event<FancyPushbuttonEvent>{now, up});
+          case button_holdRepeatPress:
+            _emit(Event<FancyPushbuttonEvent>{now, button_holdDone});
+            _emit(Event<FancyPushbuttonEvent>{now, button_up});
         }
         // Rather than keep track of all those events we just emitted, just reset it.
         // We only needed to keep track of it so we knew what kinds of fancy event(s) to emit during `run()`.
         _lastEventEmitted = std::nullopt;
       }
     }
-  
+
     void run() {
       if (!_lastEventEmitted.has_value()) {
         // We're not tracking a down; nothing to do.
@@ -262,7 +262,7 @@ class FancyPushbutton : public EventStream<FancyPushbuttonEvent>, public Runnabl
       unsigned long now = millis();
       std::optional<unsigned long> lastRepeatPressTimestamp;
       switch (lastEvent) {
-        case down:
+        case button_down:
           if (lastEventTimestamp + _shortPressTime >= now) {
             // Passed the short press time; we're now into long press territory.
             // We emit an event for the start of the long press, not now.
@@ -272,13 +272,13 @@ class FancyPushbutton : public EventStream<FancyPushbuttonEvent>, public Runnabl
             unsigned long longPressStartTimestamp = lastEventTimestamp + _shortPressTime;
             _emit(Event<FancyPushbuttonEvent>{
               longPressStartTimestamp,
-              holdStart
+              button_holdStart
             });
             // We also emit the first repeat press event.
             lastRepeatPressTimestamp = longPressStartTimestamp;
             _lastEventEmitted = Event<FancyPushbuttonEvent>{
               longPressStartTimestamp,
-              holdRepeatPress
+              button_holdRepeatPress
             };
             _emit(_lastEventEmitted.value());
           } else {
@@ -286,7 +286,7 @@ class FancyPushbutton : public EventStream<FancyPushbuttonEvent>, public Runnabl
             break;
           }
           // Fall through to repeat press territory to calculate how many more repeat presses to do beyond the first one.
-        case holdRepeatPress:
+        case button_holdRepeatPress:
           if (!lastRepeatPressTimestamp.has_value()) {
             lastRepeatPressTimestamp = lastEventTimestamp;
           }
@@ -297,7 +297,7 @@ class FancyPushbutton : public EventStream<FancyPushbuttonEvent>, public Runnabl
             i <= now;
             i += _repeatInterval
           ) {
-            _lastEventEmitted = Event<FancyPushbuttonEvent>{i, holdRepeatPress};
+            _lastEventEmitted = Event<FancyPushbuttonEvent>{i, button_holdRepeatPress};
             _emit(_lastEventEmitted.value());
           }
       }

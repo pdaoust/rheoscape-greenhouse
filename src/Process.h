@@ -33,7 +33,7 @@ template <typename TIn, typename TOut>
 class TranslatingNotEmptyProcess : public TranslatingProcess<TIn, TOut> {
   public:
     TranslatingNotEmptyProcess(Input<TIn> wrappedInput, const std::function<TOut(TIn)>& translator)
-    : TranslatingProcess(wrappedInput, [translator](std::optional<TIn> value) { return value.has_value() ? translator(value.value()) : value; })
+    : TranslatingProcess<TIn, TOut>(wrappedInput, [translator](std::optional<TIn> value) { return value.has_value() ? translator(value.value()) : value; })
     { }
 };
 
@@ -604,7 +604,7 @@ class InputSwitcher : public Input<TVal> {
     Input<TInputKey> _switchInput;
   
   public:
-    InputSwitcher(std::map<TInputKey, Input<Tval>> inputs, Input<TInputKey> switchInput)
+    InputSwitcher(std::map<TInputKey, Input<TVal>> inputs, Input<TInputKey> switchInput)
     : _inputs(inputs), _switchInput(switchInput)
     { }
 

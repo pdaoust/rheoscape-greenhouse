@@ -2,13 +2,15 @@
 #include <sstream>
 
 #include <Arduino.h>
-#include <LiquidCrystal.h>
 
+#include <Displays.h>
+#include <EventStream.h>
 #include <Input.h>
 #include <Output.h>
 #include <Process.h>
 #include <Range.h>
 #include <Runnable.h>
+#include <StateMachine.h>
 #include <Timer.h>
 
 #define SPI_CIPO_PIN 0
@@ -211,14 +213,9 @@ Output fanRelay = makeRelay(
 #define BUTTON_LEFT_PIN 7
 #define BUTTON_BOUNCE 10
 
-LiquidCrystal lcd(HD44780_RS_PIN, HD44780_EN_PIN, HD44780_D1_PIN, HD44780_D2_PIN, HD44780_D3_PIN, HD44780_D4_PIN);
-
 void setup() {
   Serial.begin(115200);
   Serial.println("Getting started!");
-  Serial.println("Setting up LCD...");
-  lcd.begin(16, 2);
-  lcd.print("Starting...");
 
   Serial.println("Setting up input pins...");
   pinMode(DOOR_W_SENSOR_PIN, INPUT_PULLUP);
