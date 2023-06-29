@@ -2,7 +2,6 @@
 #define RHEOSCAPE_INPUT_H
 
 #include <Arduino.h>
-#include <Timer.h>
 #include <map>
 #include <optional>
 #include <variant>
@@ -14,6 +13,7 @@
 #include <Wire.h>
 #include <BH1750.h>
 
+#include <Timer.h>
 #include <Range.h>
 
 template <typename TVal>

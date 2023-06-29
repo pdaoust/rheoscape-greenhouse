@@ -3,11 +3,15 @@
 
 #include <Arduino.h>
 
-#include <Displays.h>
-#include <EventStream.h>
-#include <Input.h>
-#include <Output.h>
-#include <Process.h>
+#include <display/Displays.h>
+#include <event_stream/EventStream.h>
+#include <input/CombiningProcesses.h>
+#include <input/ControlProcesses.h>
+#include <input/Input.h>
+#include <input/LogicalProcesses.h>
+#include <output/Output.h>
+#include <output/OutputFactories.h>
+#include <output/TwilioMessageOutput.h>
 #include <Range.h>
 #include <Runnable.h>
 #include <StateMachine.h>

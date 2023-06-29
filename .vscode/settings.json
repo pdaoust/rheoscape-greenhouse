@@ -51,6 +51,8 @@
         "streambuf": "cpp",
         "cinttypes": "cpp",
         "typeinfo": "cpp",
-        "iostream": "cpp"
-    }
+        "iostream": "cpp",
+        "twilio.hpp": "c"
+    },
+    "C_Cpp.default.compilerPath": "/usr/bin/gcc"
 }

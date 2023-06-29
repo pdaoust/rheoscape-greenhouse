@@ -1,0 +1,30 @@
+#ifndef RHEOSCAPE_DIGITAL_PIN_OUTPUT_H
+#define RHEOSCAPE_DIGITAL_PIN_OUTPUT_H
+
+#include <input/Input.h>
+#include <output/Output.h>
+
+class DigitalPinOutput : public Output {
+  private:
+    // Does this relay go on when its pin is HIGH or LOW?
+    bool _onState;
+    uint8_t _pin;
+    Input<bool>& _input;
+
+  public:
+    DigitalPinOutput(uint8_t pin, bool onState, Input<bool> input, Runner runner)
+    :
+      _pin(pin),
+      _onState(onState),
+      _input(input),
+      Output(runner)
+    {
+      pinMode(_pin, OUTPUT);
+    }
+
+    void run() {
+      digitalWrite(_pin, _input.read() ? _onState : !_onState);
+    }
+};
+
+#endif

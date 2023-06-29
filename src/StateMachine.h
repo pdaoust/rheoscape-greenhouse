@@ -3,8 +3,8 @@
 
 #include <map>
 #include <optional>
-#include <Input.h>
-#include <EventStream.h>
+#include <input/Input.h>
+#include <event_stream/EventStream.h>
 
 template <typename TEvent, typename TState>
 class StateMachine {
