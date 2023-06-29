@@ -2,6 +2,7 @@
 #define RHEOSCAPE_FANCY_PUSHBUTTON_H
 
 #include <event_stream/EventStream.h>
+#include <event_stream/EventStreamProcesses.h>
 
 enum FancyPushbuttonEvent {
   button_down,
@@ -170,5 +171,22 @@ class FancyPushbutton : public EventStream<FancyPushbuttonEvent>, public Runnabl
       }
     }
 };
+
+FancyPushbutton makeFancyPushbutton(uint8_t inputPin, uint8_t pinMode, unsigned long debounceTime, Runner runner, unsigned long shortPressTime = 200, unsigned long longPressTime = 400, unsigned long repeatInterval = 200) {
+  return FancyPushbutton(
+    EventStreamDebouncer(
+      InputToEventStreamNotEmpty(
+        DigitalPinInput(inputPin, pinMode),
+        runner
+      ),
+      debounceTime,
+      runner
+    ),
+    runner,
+    shortPressTime,
+    longPressTime,
+    repeatInterval
+  );
+}
 
 #endif

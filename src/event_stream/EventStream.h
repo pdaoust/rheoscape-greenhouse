@@ -6,7 +6,6 @@
 #include <Arduino.h>
 
 #include <Timer.h>
-#include <input/Input.h>
 #include <Runnable.h>
 
 template <typename T>
