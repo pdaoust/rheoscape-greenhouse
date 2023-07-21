@@ -3,8 +3,10 @@
 
 #include <Arduino.h>
 
+#include <display/BitmapProcesses.h>
 #include <display/Displays.h>
 #include <event_stream/EventStream.h>
+#include <event_stream/FancyPushbutton.h>
 #include <input/CombiningProcesses.h>
 #include <input/ControlProcesses.h>
 #include <input/Input.h>
@@ -211,11 +213,29 @@ Output fanRelay = makeRelay(
   runner
 );
 
+// Now, set up the UI.
+// First, turn the digital inputs into fancy pushbuttons.
+
 #define BUTTON_UP_PIN 4
 #define BUTTON_RIGHT_PIN 5
 #define BUTTON_DOWN_PIN 6
 #define BUTTON_LEFT_PIN 7
+#define BUTTON_CENTRE_PIN 8
+#define BUTTON_MODE INPUT_PULLUP
 #define BUTTON_BOUNCE 10
+
+FancyPushbutton buttonUp = makeFancyPushbutton(BUTTON_UP_PIN, BUTTON_MODE, BUTTON_BOUNCE, runner);
+FancyPushbutton buttonDown = makeFancyPushbutton(BUTTON_DOWN_PIN, BUTTON_MODE, BUTTON_BOUNCE, runner);
+FancyPushbutton buttonLeft = makeFancyPushbutton(BUTTON_LEFT_PIN, BUTTON_MODE, BUTTON_BOUNCE, runner);
+FancyPushbutton buttonRight = makeFancyPushbutton(BUTTON_RIGHT_PIN, BUTTON_MODE, BUTTON_BOUNCE, runner);
+FancyPushbutton buttonCentre = makeFancyPushbutton(BUTTON_CENTRE_PIN, BUTTON_MODE, BUTTON_BOUNCE, runner);
+
+// Now set up the display.
+
+CompositorProcess mainDisplay()
+CompositorProcess greenhouseTempSettings()
+CompositorProcess heatmatTempSettings()
+St7735_1_8_inches_landscape display()
 
 void setup() {
   Serial.begin(115200);

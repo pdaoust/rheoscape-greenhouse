@@ -2,6 +2,8 @@
 #define RHEOSCAPE_BITMAP_PROCESSES_H
 
 #include <display/Bitmap.h>
+#include <display/Canvas.h>
+#include <input/Input.h>
 
 template <typename TBitmapIn>
 class BitmapBoxingProcess : public Input<Bitmap16> {
