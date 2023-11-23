@@ -7,7 +7,9 @@
 enum FancyPushbuttonEvent {
   button_down,
   button_up,
+  // Emitted for all kinds of press -- short, long, and hold repeat.
   button_press,
+  button_shortPress,
   button_longPress,
   // The button has been held for more than a short press period.
   // We're now into long press territory.
@@ -23,27 +25,37 @@ enum FancyPushbuttonEvent {
 //
 // Here's the sequence of events for a short press:
 //
-// 1. button_down
-// 2. button_press
-// 3. button_up
+// 1. [button pressed]
+// 2. button_down
+// 3. [button released]
+// 4. button_press
+// 5. button_shortPress
+// 5. button_up
 //
 // button_press will be emitted at the same time as button_up, and its timestamp will be the same.
 //
 // Here's the sequence of events for a long press:
 //
-// 1. button_down
-// 2. button_holdStart
-// 3. button_longPress
-// 4. button_holdDone
-// 5. button_up
+// 1. [button pressed]
+// 2. button_down
+// 3. [shortPressTime interval elapsed]
+// 4. button_holdStart
+// 5. [button released]
+// 6. button_press
+// 7. button_longPress
+// 8. button_holdDone
+// 9. button_up
 //
 // Here's the sequence of events for a hold with repeat press events:
 //
-// 1. button_down
-// 2. button_holdStart
-// 3..n+3. button_holdRepeatPress ... (n times)
-// n+4. button_holdDone
-// n+5. button_up
+// 1. [button pressed]
+// 2. button_down
+// 3. [shortPressTime interval elapsed]
+// 4. button_holdStart
+// 5. [longPressTime interval elapsed]
+// 6..n+6. button_press and button_holdRepeatPress ... (n times)
+// n+7. button_holdDone
+// n+8. button_up
 class FancyPushbutton : public EventStream<FancyPushbuttonEvent>, public Runnable {
   private:
     const uint16_t _shortPressTime;
@@ -92,9 +104,11 @@ class FancyPushbutton : public EventStream<FancyPushbuttonEvent>, public Runnabl
         switch (lastPushbuttonEventEmitted) {
           case button_down:
             _emit(Event<FancyPushbuttonEvent>{now, button_press});
+            _emit(Event<FancyPushbuttonEvent>{now, button_shortPress});
             _emit(Event<FancyPushbuttonEvent>{now, button_up});
             break;
           case button_holdStart:
+            _emit(Event<FancyPushbuttonEvent>{now, button_press});
             _emit(Event<FancyPushbuttonEvent>{now, button_longPress});
             _emit(Event<FancyPushbuttonEvent>{now, button_holdDone});
             _emit(Event<FancyPushbuttonEvent>{now, button_up});
@@ -143,6 +157,7 @@ class FancyPushbutton : public EventStream<FancyPushbuttonEvent>, public Runnabl
             // We're beyond long press territory, into repeat press territory.
             // Emit the first repeat press event.
             lastRepeatPressTimestamp = lastEventTimestamp + _longPressTime;
+            _emit(Event<FancyPushbuttonEvent>{now, button_press});
             _lastEventEmitted = Event<FancyPushbuttonEvent>{
               lastRepeatPressTimestamp.value(),
               button_holdRepeatPress
@@ -165,6 +180,7 @@ class FancyPushbutton : public EventStream<FancyPushbuttonEvent>, public Runnabl
             i <= now;
             i += _repeatInterval
           ) {
+            _emit(Event<FancyPushbuttonEvent>{now, button_press});
             _lastEventEmitted = Event<FancyPushbuttonEvent>{i, button_holdRepeatPress};
             _emit(_lastEventEmitted.value());
           }

@@ -16,11 +16,25 @@
 #include <Timer.h>
 #include <Range.h>
 
-template <typename TVal>
-class Input {
+// TODO: transition over to a choice between a non-nullable input or a nullable one.
+//
+// 1. Delete `Input`
+// 2. Rename `BasicInput` to `Input`
+// 3. optional: rename `NullableInput` to something shorter?
+template <typename T>
+class BasicInput {
+  private:
+    static T default_t;
+
   public:
-    virtual std::optional<TVal> read() { return std::nullopt; }
+    virtual T read() { return default_t; }
 };
+
+template <typename T>
+class NullableInput : Input<T> { };
+
+template <typename T>
+class Input : NullableInput<T> { };
 
 template <typename TChan, typename TVal>
 class MultiInput {
@@ -89,19 +103,22 @@ class PointerInput : public Input<TVal> {
 
 // A simple input whose value can be set.
 template <typename TVal>
-class StateInput : public Input<TVal> {
+class BasicStateInput : public Input<TVal> {
   private:
-    std::optional<TVal> _value;
+    TVal _value;
 
   public:
-    std::optional<TVal> read() {
+    TVal read() {
       return _value;
     }
 
-    void write(std::optional<TVal> value) {
+    void write(TVal value) {
       _value = value;
     }
 };
+
+template <typename TVal>
+class StateInput : public BasicStateInput<std::optional<TVal>> { }
 
 // DeviceAddress is a stupid type to use -- it's just an array so you hvae to pass a pointer.
 // And you can't use it as a map key.

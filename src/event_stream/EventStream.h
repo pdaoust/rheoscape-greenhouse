@@ -12,6 +12,9 @@ template <typename T>
 struct Event {
   unsigned long timestamp;
   T value;
+
+  Event(unsigned long timestamp, T value)
+  : timestamp(timestamp), value(value) { }
 };
 
 template <typename T>
@@ -38,5 +41,9 @@ class EventStream {
       _subscribers.push_back(subscriber);
     }
 };
+
+// I suppose it's silly to make this; just feel like it makes intentions clear.
+template <typename T>
+class NullEventStream : public EventStream<T> { };
 
 #endif
