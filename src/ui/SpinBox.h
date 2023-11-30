@@ -9,7 +9,7 @@
 #include <ui/Widget.h>
 
 template <typename TNum, typename TBitmap>
-class SpinBox : public InteractiveWidget<TBitmap, NavButtonEvent> {
+class SpinBox : public EditableWidget<TBitmap, NavButtonClusterEvent> {
   protected:
     BasicStateInput<TNum> _value;
     BasicInput<TNum> _step;
@@ -28,46 +28,27 @@ class SpinBox : public InteractiveWidget<TBitmap, NavButtonEvent> {
       }
     }
 
-    virtual bool _handleEventAndShouldBubble(Event<NavButtonEvent> event) {
+    virtual bool _handleEditEventAndShouldBubble(Event<NavButtonClusterEvent> event) {
       switch (true) {
-        case _focused.read():
-          switch (true) {
-            // Increment on all press events -- short, long, and hold-repeat.
-            case (event.value.button & navbutton_up | navbutton_right) > 0 && event.value.event == button_press:
-              _changeBy(1);
-              // This widget captures the up/down events, naturally.
-              return false;
-            
-            case (event.value.button & navbutton_down | navbutton_left) > 0 && event.value.event == button_press:
-              _changeBy(-1);
-              return false;
-            
-            case event.value.button == navbutton_ok && event.value.event == button_press:
-              _value.write(_editBuffer.value());
-              _focused.write(false);
-              return false;
-            
-            case event.value.button == navbutton_back && event.value.event == button_press:
-              _focused.write(false);
-              return false;
-            
-            default:
-              // I think I've covered all buttons, but just in case I expand the nav button cluster enum later...
-              // Unhandled buttons prob shouldn't be captured.
-              return true;
-          }
+        // Increment on all press events -- short, long, and hold-repeat.
+        case event.value.isPressed(navbutton_up | navbutton_right):
+          _changeBy(1);
+          // This widget captures the up/down events, naturally.
+          return false;
         
-        // When an item is selected but not focused, capture the ok event only to start editing.
-        case selected.read() && event.value.button == navbutton_ok && event.value.event == button_press:
-          _editBuffer = _value.read();
-          _focused.write(true);
+        case event.value.isPressed(navbutton_down | navbutton_left):
+          _changeBy(-1);
+          return false;
+        
+        default:
+          return true;
       }
     }
   
   public:
-    SpinBox(BasicStateInput<TNum> value, BasicInput<TNum> step, BasicInput<Range<TNum>> range)
+    SpinBox(BasicStateInput<TNum> value, BasicInput<TNum> step, BasicInput<Range<TNum>> range, BasicInput<bool> enabled, BasicInput<bool> visible, BasicInput<bool> selected, BasicStateInput<bool> editing, BasicInput<WidgetStyleRules> styleRules, EventStream<TEvent> eventStream)
     :
-      _value(value),
+      EditableWidget(value, enabled, visible, selected, editing, styleRules, eventStream),
       _step(step),
       _range(range)
     { }

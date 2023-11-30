@@ -11,12 +11,12 @@
 #include <ui/Widget.h>
 
 template <typename TBitmap>
-class TextInputWidget : public InteractiveWidget<TBitmap, NavButtonEvent> {
+class TextInputWidget : public InteractiveWidget<TBitmap, NavButtonClusterEvent> {
   private:
     Input<std::string> _value;
     uint8_t _cursorPosition;
     std::optional<std::string> _editBuffer;
-    StateMachine<NavButtonEvent, TextInputWidgetState> _stateMachine;
+    StateMachine<NavButtonClusterEvent, TextInputWidgetState> _stateMachine;
 
   protected: 
     std::optional<TBitmap> _draw() {

@@ -133,18 +133,18 @@ struct WidgetStyleRules {
   : base(base), disabled(disabled) { }
 };
 
-struct SelectableWidgetStyleRules : public WidgetStyleRules {
+struct InteractiveWidgetStyleRules : public WidgetStyleRules {
   StyleRule selected;
 
-  SelectableWidgetStyleRules(StyleRule base, StyleRule disabled, StyleRule selected)
+  InteractiveWidgetStyleRules(StyleRule base, StyleRule disabled, StyleRule selected)
   : WidgetStyleRules(base, disabled), selected(selected) { }
 };
 
-struct InteractiveWidgetStyleRules : public SelectableWidgetStyleRules {
-  StyleRule focused;
+struct EditableWidgetStyleRules : public SelectableWidgetStyleRules {
+  StyleRule editing;
 
-  InteractiveWidgetStyleRules(StyleRule base, StyleRule disabled, StyleRule selected, StyleRule focused)
-  : SelectableWidgetStyleRules(base, disabled, selected), focused(focused) { }
+  EditableWidgetStyleRules(StyleRule base, StyleRule disabled, StyleRule selected, StyleRule editing)
+  : InteractiveWidgetStyleRules(base, disabled, selected), editing(editing) { }
 };
 
 struct Theme {
@@ -152,7 +152,7 @@ struct Theme {
   // Non-interactive text -- input labels, for instance.
   WidgetStyleRules text;
   // Text/number boxes and unopened select boxes.
-  InteractiveWidgetStyleRules input;
+  EditableWidgetStyleRules input;
   // Wrapper around things that appear in a menu, like labels and inputs.
   InteractiveWidgetStyleRules menuItem;
   InteractiveWidgetStyleRules tab;
