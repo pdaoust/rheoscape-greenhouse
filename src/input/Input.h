@@ -4,6 +4,7 @@
 #include <Arduino.h>
 #include <map>
 #include <optional>
+#include <functional>
 #include <variant>
 #include <vector>
 #include <OneWire.h>
@@ -33,10 +34,10 @@ class BasicInput {
 template <typename T>
 class BasicFunctionInput : BasicInput<T> {
   private:
-    std::function<(), T> _computeValue;
+    std::function<T()> _computeValue;
   
   public:
-    BasicFunctionInput(std::function<(), T> computeValue)
+    BasicFunctionInput(std::function<T()> computeValue)
     : _computeValue(computeValue) { }
 
     virtual T read() { return _computeValue(); }
@@ -44,9 +45,6 @@ class BasicFunctionInput : BasicInput<T> {
 
 template <typename T>
 class NullableInput : BasicInput<std::optional<T>> { };
-
-template <typename T>
-class Input : NullableInput<T> { };
 
 template <typename TChan, typename TVal>
 class BasicMultiInput {
@@ -56,7 +54,7 @@ class BasicMultiInput {
     public:
       virtual TVal readChannel(TChan channel) { return default_t; };
 
-      Input<TVal> getInputForChannel(TChan channel);
+      BasicInput<TVal> getInputForChannel(TChan channel);
 };
 
 template <typename TChan, typename TVal>
@@ -66,7 +64,7 @@ class SingleChannelOfBasicMultiInput {
     TChan _channel;
 
   public:
-    SingleChannelOfBasicMultiInput(MultiInput<TChan, TVal>& wrappedInput, TChan channel)
+    SingleChannelOfBasicMultiInput(BasicMultiInput<TChan, TVal>& wrappedInput, TChan channel)
       :
         _wrappedInput(wrappedInput),
         _channel(channel)
@@ -78,68 +76,62 @@ class SingleChannelOfBasicMultiInput {
 };
 
 template <typename TChan, typename TVal>
-Input<TVal> BasicMultiInput<TChan, TVal>::getInputForChannel(TChan channel) {
+BasicInput<TVal> BasicMultiInput<TChan, TVal>::getInputForChannel(TChan channel) {
   return SingleChannelOfBasicMultiInput<TChan, TVal>(*this, channel);
 }
 
 template <typename TChan, typename TVal>
 class NullableMultiInput : BasicMultiInput<TChan, std::optional<TVal>> { };
 
-template <typename TChan, typename TVal>
-class MultiInput : NullableMultiInput<TChan, TVal> { };
-
 // Lift a constant into an input.
-template <typename TVal>
-class ConstantInput : public Input<TVal> {
+template <typename T>
+class BasicConstantInput : public BasicInput<T> {
   private:
-    std::optional<TVal> _value;
+    T _value;
 
   public:
-    ConstantInput(std::optional<TVal> value) : _value(value) { }
+    BasicConstantInput(T value) : _value(value) { }
 
-    std::optional<TVal> read() {
+    T read() {
       return _value;
     }
 };
 
 // Special case that gets used a lot.
-template <typename TVal>
-Input<Range<std::optional<TVal>>> makeRangeConstantInput(TVal min, TVal max) {
-  return ConstantInput<Range<std::optional<TVal>>>(Range<std::optional<TVal>>{ min, max });
+template <typename T>
+BasicInput<Range<T>> makeRangeConstantInput(T min, T max) {
+  return BasicConstantInput<Range<T>>(Range<T>{ min, max });
 }
 
 // A simple input that just returns whatever the value currently is at the pointer passed to it.
-template <typename TVal>
-class PointerInput : public Input<TVal> {
+template <typename T>
+class PointerInput : public BasicInput<T> {
   private:
-    TVal* _pointer;
+    T* _pointer;
 
   public:
-    PointerInput(TVal* pointer) : _pointer(pointer) { }
+    PointerInput(T* pointer) : _pointer(pointer) { }
 
-    std::optional<TVal> read() {
+    std::optional<T> read() {
       return &_pointer;
     }
 };
 
 // A simple input whose value can be set.
-template <typename TVal>
-class BasicStateInput : public Input<TVal> {
+template <typename T>
+class BasicStateInput : public BasicInput<T> {
   private:
-    TVal _value;
+    T _value;
 
   public:
-    TVal read() {
+    T read() {
       return _value;
     }
 
-    void write(TVal value) {
+    void write(T value) {
       _value = value;
     }
 };
-
-template <typename TVal>
-class StateInput : public BasicStateInput<std::optional<TVal>>, public Input<TVal> { };
 
 // DeviceAddress is a stupid type to use -- it's just an array so you hvae to pass a pointer.
 // And you can't use it as a map key.
@@ -160,7 +152,7 @@ uint64_t deviceAddressToInt(DeviceAddress deviceAddress) {
   return address;
 }
 
-class Ds18b20 : public MultiInput<uint64_t, float> {
+class Ds18b20 : public BasicMultiInput<uint64_t, std::optional<float>> {
   private:
     DallasTemperature _inputs;
     std::vector<uint64_t> _deviceAddresses;
@@ -238,7 +230,7 @@ enum class Sht21Channel {
   humidity
 };
 
-class Sht21 : public MultiInput<Sht21Channel, float> {
+class Sht21 : public BasicMultiInput<Sht21Channel, std::optional<float>> {
   private:
     SHT21 _input;
     float _tempOffset;
@@ -316,7 +308,7 @@ enum class Bme280Channel {
   pressureKpa
 };
 
-class Bme280 : public MultiInput<Bme280Channel, float> {
+class Bme280 : public BasicMultiInput<Bme280Channel, std::optional<float>> {
   private:
     BME280_DEV _input;
     float _tempOffset;
@@ -364,7 +356,7 @@ class Bme280 : public MultiInput<Bme280Channel, float> {
     }
 };
 
-class Bh1750 : public Input<float> {
+class Bh1750 : public BasicInput<std::optional<float>> {
   private:
     BH1750 _lightMeter;
     RepeatTimer _timer;
@@ -395,7 +387,7 @@ class Bh1750 : public Input<float> {
     }
 };
 
-class DigitalPinInput : public Input<bool> {
+class DigitalPinInput : public BasicInput<bool> {
   private:
     uint8_t _pin;
     bool _onState;
@@ -409,13 +401,13 @@ class DigitalPinInput : public Input<bool> {
       pinMode(_pin, mode);
     }
 
-    std::optional<bool> read() {
+    bool read() {
       bool pinState = digitalRead(_pin);
       return _onState ? pinState : !pinState;
     }
 };
 
-class AnalogPinInput : public Input<float> {
+class AnalogPinInput : public BasicInput<float> {
   private:
     uint8_t _pin;
     static uint8_t _resolution;
@@ -431,7 +423,7 @@ class AnalogPinInput : public Input<float> {
       }
     }
 
-    std::optional<float> read() {
+    float read() {
       return (float)analogRead(_pin) / (2 ^ _resolution - 1);
     }
 

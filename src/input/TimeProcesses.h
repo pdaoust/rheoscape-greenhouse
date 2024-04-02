@@ -4,15 +4,15 @@
 #include <input/Input.h>
 
 // Take 'continuous' values and 'snap' them to a time interval.
-template <typename TVal>
-class TimeQuantisingProcess : public Input<TVal> {
+template <typename T>
+class TimeQuantisingProcess : public BasicInput<T> {
   private:
-    Input<TVal> _wrappedInput;
+    BasicInput<T> _wrappedInput;
     RepeatTimer _timer;
-    std::optional<TVal> _lastReadValue;
+    std::optional<T> _lastReadValue;
   
   public:
-    TimeQuantisingProcess(Input<TVal> wrappedInput, unsigned long interval)
+    TimeQuantisingProcess(BasicInput<T> wrappedInput, unsigned long interval)
     :
       _wrappedInput(wrappedInput),
       _timer(RepeatTimer(
@@ -24,7 +24,7 @@ class TimeQuantisingProcess : public Input<TVal> {
       ))
     { }
 
-    std::optional<TVal> read() {
+    T read() {
       _timer.tick();
       return _lastReadValue;
     }
@@ -32,23 +32,23 @@ class TimeQuantisingProcess : public Input<TVal> {
 
 // Don't let a value change more frequently than every n milliseconds.
 // Kinda like TimeQuantisingProcess, except it doesn't 'snap' to the interval.
-template <typename TVal>
-class ThrottlingProcess : public Input<TVal> {
+template <typename T>
+class ThrottlingProcess : public BasicInput<T> {
   private:
-    Input<TVal> _wrappedInput;
+    BasicInput<T> _wrappedInput;
     unsigned long _minDelay;
-    std::optional<TVal> _lastReadValue;
+    T _lastReadValue;
     Timer _timer;
 
   public:
-    ThrottlingProcess(Input<TVal> wrappedInput, unsigned long minDelay)
+    ThrottlingProcess(BasicInput<T> wrappedInput, unsigned long minDelay)
     :
       _wrappedInput(wrappedInput),
       _minDelay(minDelay),
       _timer(Timer(0, [](){}))
     { }
 
-    std::optional<TVal> read() {
+    T read() {
       // Maybe I coulda figured out how to use my own Throttle
       // (which I suspect I built for this purpose) for this process,
       // but I couldn't figure out how to make it value-aware --
@@ -57,7 +57,7 @@ class ThrottlingProcess : public Input<TVal> {
         return _lastReadValue;
       }
 
-      std::optional<TVal> value = _wrappedInput.read();
+      T value = _wrappedInput.read();
       if (value != _lastReadValue) {
         _timer.restart(millis() + _minDelay);
         _lastReadValue = value;
@@ -68,15 +68,15 @@ class ThrottlingProcess : public Input<TVal> {
 
 // Convert a boolean input to another boolean input,
 // where true is converted to a true/false pulse.
-class BlinkingProcess : public Input<bool> {
+class BlinkingProcess : public BasicInput<bool> {
   private:
-    Input<bool> _wrappedInput;
+    BasicInput<bool> _wrappedInput;
     RepeatTimer _fullCycleTimer;
     Timer _offTimer;
     unsigned long _onTime;
   
   public:
-    BlinkingProcess(Input<bool> wrappedInput, unsigned long onTime, unsigned long offTime)
+    BlinkingProcess(BasicInput<bool> wrappedInput, unsigned long onTime, unsigned long offTime)
     :
       _wrappedInput(wrappedInput),
       _onTime(onTime),
@@ -93,8 +93,8 @@ class BlinkingProcess : public Input<bool> {
       ))
     { }
 
-    std::optional<bool> read() {
-      std::optional<bool> innerValue = _wrappedInput.read();
+    bool read() {
+      bool innerValue = _wrappedInput.read();
       if (innerValue) {
         if (!_fullCycleTimer.isRunning()) {
           _fullCycleTimer.restart(millis());
@@ -108,14 +108,14 @@ class BlinkingProcess : public Input<bool> {
 };
 
 // Convert a 0..1 float to a boolean suitable for using in slow PWM outputs.
-class SlowPwmProcess : public Input<bool> {
+class SlowPwmProcess : public BasicInput<bool> {
   private:
     RepeatTimer _timer;
     bool _currentValue;
   
   public:
     SlowPwmProcess(
-      Input<float> wrappedInput,
+      BasicInput<float> wrappedInput,
       // The smallest discrete value in a cycle.
       unsigned long interval,
       // The number of intervals in a cycle. interval * resolution = cycle length.
@@ -125,7 +125,7 @@ class SlowPwmProcess : public Input<bool> {
         millis(),
         interval,
         [this, &wrappedInput, resolution]() {
-          float value = wrappedInput.read().value_or(0.0);
+          float value = wrappedInput.read();
           unsigned long ticksPassed = _timer.getCount() % resolution;
           float dutyCycle = ticksPassed / resolution;
           _currentValue = ticksPassed <= value;
@@ -133,7 +133,7 @@ class SlowPwmProcess : public Input<bool> {
       ))
     { }
 
-    std::optional<bool> read() {
+    bool read() {
       _timer.tick();
       return _currentValue;
     }
@@ -147,29 +147,25 @@ class SlowPwmProcess : public Input<bool> {
 // until it finally reads 20 in 10 seconds.
 // Of course, if the input goes back down to 10 the next second,
 // it'll head towards that value.
-template <typename TVal>
-class HysteresisProcess : public Input<TVal> {
+template <typename T>
+class HysteresisProcess : public BasicInput<T> {
   private:
-    Input<TVal> _wrappedInput;
+    BasicInput<T> _wrappedInput;
     unsigned long _interval;
-    TVal _stepsPerInterval;
-    std::optional<TVal> _lastValue;
+    T _stepsPerInterval;
+    T _lastValue;
     unsigned long _lastRun;
 
   public:
-    HysteresisProcess(Input<TVal> wrappedInput, unsigned long interval, TVal stepsPerInterval)
+    HysteresisProcess(BasicInput<T> wrappedInput, unsigned long interval, T stepsPerInterval)
     :
       _wrappedInput(wrappedInput),
       _interval(interval),
       _stepsPerInterval(stepsPerInterval)
     { }
   
-    std::optional<TVal> read() {
-      std::optional<TVal> newValue = _wrappedInput.read();
-      if (!newValue.has_value()) {
-        return _lastValue;
-      }
-
+    T read() {
+      T newValue = _wrappedInput.read();
       unsigned long now = millis();
       if (_lastRun) {
         _lastValue = _lastValue + (float)(now - _lastRun) / _interval * _stepsPerInterval;
@@ -184,27 +180,23 @@ class HysteresisProcess : public Input<TVal> {
 
 // Smooth a input reading over a moving average time interval in milliseconds,
 // using the exponential moving average or single-pole IIR method.
-template <typename TVal>
-class ExponentialMovingAverageProcess : public Input<TVal> {
+template <typename T>
+class ExponentialMovingAverageProcess : public BasicInput<T> {
   private:
-    Input<TVal> _wrappedInput;
+    BasicInput<T> _wrappedInput;
     unsigned long _averageOver;
-    std::optional<TVal> _lastValue;
+    T _lastValue;
     unsigned long _lastRun;
   
   public:
-    ExponentialMovingAverageProcess(Input<TVal> wrappedInput, unsigned long averageOver)
+    ExponentialMovingAverageProcess(BasicInput<T> wrappedInput, unsigned long averageOver)
     :
       _wrappedInput(wrappedInput),
       _averageOver(averageOver)
     { }
 
-    std::optional<TVal> read() {
-      std::optional<TVal> newValue = _wrappedInput.read();
-      if (!newValue.has_value()) {
-        return _lastValue;
-      }
-
+    T read() {
+      T newValue = _wrappedInput.read();
       unsigned long now = millis();
       if (_lastRun) {
         float intervalsSinceLastRun = (float)(now - _lastRun) / _averageOver;
@@ -221,15 +213,15 @@ class ExponentialMovingAverageProcess : public Input<TVal> {
 
 // When the input goes true, emit true for a given number of milliseconds,
 // then revert to false regardless of whether the input is true or false.
-class TimedLatchProcess : public Input<bool> {
+class TimedLatchProcess : public BasicInput<bool> {
   private:
-    Input<bool> _wrappedInput;
+    BasicInput<bool> _wrappedInput;
     Timer _timer;
     unsigned long _timeout;
-    std::optional<bool> _previousValue;
+    bool _previousValue;
   
   public:
-    TimedLatchProcess(Input<bool> wrappedInput, unsigned long timeout)
+    TimedLatchProcess(BasicInput<bool> wrappedInput, unsigned long timeout)
     :
       _wrappedInput(wrappedInput),
       _timeout(timeout),
@@ -242,7 +234,7 @@ class TimedLatchProcess : public Input<bool> {
       ))
     { }
 
-    std::optional<bool> read() {
+    bool read() {
       _timer.tick();
       if (_timer.isRunning()) {
         // Within the timer window.

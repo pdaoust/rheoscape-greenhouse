@@ -14,33 +14,28 @@ enum ProcessControlDirection {
 // and tries to drive the control down when the input is above the setpoint max.
 // In between the two, it tries to keep the control stable.
 template <typename T>
-class BangBangProcess : public Input<ProcessControlDirection> {
+class BangBangProcess : public BasicInput<ProcessControlDirection> {
   protected:
-    Input<T> _valueInput;
-    Input<Range<std::optional<T>>> _setpointRangeInput;
+    BasicInput<T> _valueInput;
+    BasicInput<Range<T>> _setpointRangeInput;
     ProcessControlDirection _outputDirection;
 
   public:
-    BangBangProcess(Input<T> valueInput, Input<Range<std::optional<T>>> setpointRangeInput)
+    BangBangProcess(BasicInput<T> valueInput, BasicInput<Range<T>> setpointRangeInput)
     :
       _valueInput(valueInput),
       _setpointRangeInput(setpointRangeInput)
     { }
 
-    std::optional<ProcessControlDirection> read() {
-      std::optional<T> value = _valueInput.read();
-      std::optional<Range<std::optional<T>>> setpointRange = _setpointRangeInput.read();
-      if (!value.has_value() || !setpointRange.has_value()) {
-        // Can't actually do anything with non-existent values.
-        return std::nullopt;
-      }
-
-      if (setpointRange.value().min.has_value() && value.value() < setpointRange.value().min.value()) {
+    ProcessControlDirection read() {
+      T value = _valueInput.read();
+      Range<T> setpointRange = _setpointRangeInput.read();
+      if (value < setpointRange.min) {
         // Tell the output to attempt to increase the process variable if it's too low.
         // If the output controls something that increases the process variable (e.g., heater, sprinkler), turn it on.
         // Otherwise (e.g., cooler), turn it off.
         return up;
-      } else if (setpointRange.value().max.has_value() && value.value() < setpointRange.value().max.value()) {
+      } else if (value < setpointRange.max) {
         // Naturally, the opposite happens when it goes above the setpoint.
         return down;
       }
@@ -51,10 +46,11 @@ class BangBangProcess : public Input<ProcessControlDirection> {
 // This one converts a bang-bang input to a boolean, suitable for a switch.
 // The behaviour when it receives a neutral input depends on its prior state.
 // If it was previously up, it keeps it up, and vice versa.
-class DirectionToBooleanProcess : public Input<bool> {
+class DirectionToBooleanProcess : public BasicInput<bool> {
   private:
-    Input<ProcessControlDirection> _wrappedInput;
-    std::optional<ProcessControlDirection> _lastInputValue;
+    BasicInput<ProcessControlDirection> _wrappedInput;
+    std::optional<ProcessControlDirection> _lastNonNeutralInputValue;
+    bool _initialState;
     bool _upIs;
 
     // We know we should never hit neutral, so disable the compiler warning.
@@ -71,35 +67,34 @@ class DirectionToBooleanProcess : public Input<bool> {
     #pragma GCC diagnostic pop
 
   public:
-    DirectionToBooleanProcess(Input<ProcessControlDirection> wrappedInput, bool upIs)
+    DirectionToBooleanProcess(BasicInput<ProcessControlDirection> wrappedInput, bool upIs, bool initialState = false)
     :
       _wrappedInput(wrappedInput),
-      _upIs(upIs)
+      _upIs(upIs),
+      _initialState(initialState)
     { }
 
-    std::optional<bool> read() {
-      std::optional<ProcessControlDirection> inputValue = _wrappedInput.read();
-      if (!inputValue.has_value()) {
-        return std::nullopt;
-      }
-
-      switch (inputValue.value()) {
+    #pragma GCC diagnostic push
+    #pragma GCC diagnostic ignored "-Wreturn-type"
+    bool read() {
+      ProcessControlDirection inputValue = _wrappedInput.read();
+      switch (inputValue) {
         case up:
         case down:
-          _lastInputValue = inputValue;
-          return _processControlDirectionToBool(inputValue.value());
+          _lastNonNeutralInputValue = inputValue;
+          return _processControlDirectionToBool(inputValue);
         case neutral:
-          if (!_lastInputValue.has_value()) {
-            // In the case where _lastInputValue doesn't yet have a value,
+          if (!_lastNonNeutralInputValue.has_value()) {
+            // In the case where _lastNonNeutralInputValue doesn't yet have a value,
             // it's not possible yet to determine whether neutral should hold up or down,
             // because we haven't seen an up or down yet.
-            return std::nullopt;
+            return _initialState;
           }
-          return _processControlDirectionToBool(_lastInputValue.value());
-        // Just doing this to shut the compiler up. It's actually unreachable.
-        default: return std::nullopt;
+          // If we're in the limbo of the dead zone, use the last remembered control direction.
+          return _processControlDirectionToBool(_lastNonNeutralInputValue.value());
       }
     }
+    #pragma GCC diagnostic pop
 };
 
 #endif
