@@ -50,11 +50,8 @@ Output makeCover(
   );
   Input<float> translator = TranslatingProcess<bool, float>(
     throttle,
-    [](std::optional<bool> value) {
-      if (value.has_value()) {
-        return (std::optional<float>)(value ? 1.0 : -1.0);
-      }
-      return (std::optional<float>)std::nullopt;
+    [](bool value) {
+      return (float)(value ? 1.0 : -1.0);
     }
   );
   return MotorDriver(

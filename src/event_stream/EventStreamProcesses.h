@@ -5,10 +5,10 @@
 #include <event_stream/EventStream.h>
 
 template <typename T>
-class InputToEventStream : public EventStream<std::optional<T>>, public Runnable {
+class InputToEventStream : public EventStream<T>, public Runnable {
   private:
     Input<T> _wrappedInput;
-    std::optional<T> _lastSeenValue;
+    T _lastSeenValue;
   
   public:
     InputToEventStream(Input<T> wrappedInput, Runner runner)
@@ -18,7 +18,7 @@ class InputToEventStream : public EventStream<std::optional<T>>, public Runnable
     { }
 
     void run() {
-      std::optional<T> value = _wrappedInput.read();
+      T value = _wrappedInput.read();
       if (value != _lastSeenValue) {
         _lastSeenValue = value;
         EventStream<T>::_emit(value);
@@ -88,14 +88,14 @@ class EventStreamNotEmpty : public EventStreamTranslator<std::optional<T>, T> {
 template <typename T>
 class InputToEventStreamNotEmpty : public EventStreamNotEmpty<T>, public Runnable {
   private:
-    Input<T> _wrappedInput;
+    Input<std::optional<T>> _wrappedInput;
 
   public:
-    InputToEventStreamNotEmpty(Input<T> wrappedInput, Runner runner)
+    InputToEventStreamNotEmpty(Input<std::optional<T>> wrappedInput, Runner runner)
     :
       Runnable(runner),
       EventStreamNotEmpty<T>(
-        InputToEventStream<T>(wrappedInput)
+        InputToEventStream<std::optional<T>>(wrappedInput)
       )
     { }
 
