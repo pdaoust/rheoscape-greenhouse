@@ -31,27 +31,42 @@ class BasicInput {
 };
 
 template <typename T>
-class NullableInput : Input<T> { };
+class BasicFunctionInput : BasicInput<T> {
+  private:
+    std::function<(), T> _computeValue;
+  
+  public:
+    BasicFunctionInput(std::function<(), T> computeValue)
+    : _computeValue(computeValue) { }
+
+    virtual T read() { return _computeValue(); }
+};
+
+template <typename T>
+class NullableInput : BasicInput<std::optional<T>> { };
 
 template <typename T>
 class Input : NullableInput<T> { };
 
 template <typename TChan, typename TVal>
-class MultiInput {
-  public:
-    virtual std::optional<TVal> readChannel(TChan channel) { return std::nullopt; }
+class BasicMultiInput {
+    private:
+      static TVal default_t;
 
-    Input<TVal> getInputForChannel(TChan channel);
+    public:
+      virtual TVal readChannel(TChan channel) { return default_t; };
+
+      Input<TVal> getInputForChannel(TChan channel);
 };
 
 template <typename TChan, typename TVal>
-class SingleChannelOfMultiInput : public Input<TVal> {
+class SingleChannelOfBasicMultiInput {
   private:
-    MultiInput<TChan, TVal>& _wrappedInput;
+    BasicMultiInput<TChan, TVal>& _wrappedInput;
     TChan _channel;
 
   public:
-    SingleChannelOfMultiInput(MultiInput<TChan, TVal>& wrappedInput, TChan channel)
+    SingleChannelOfBasicMultiInput(MultiInput<TChan, TVal>& wrappedInput, TChan channel)
       :
         _wrappedInput(wrappedInput),
         _channel(channel)
@@ -63,9 +78,15 @@ class SingleChannelOfMultiInput : public Input<TVal> {
 };
 
 template <typename TChan, typename TVal>
-Input<TVal> MultiInput<TChan, TVal>::getInputForChannel(TChan channel) {
-  return SingleChannelOfMultiInput<TChan, TVal>(*this, channel);
+Input<TVal> BasicMultiInput<TChan, TVal>::getInputForChannel(TChan channel) {
+  return SingleChannelOfBasicMultiInput<TChan, TVal>(*this, channel);
 }
+
+template <typename TChan, typename TVal>
+class NullableMultiInput : BasicMultiInput<TChan, std::optional<TVal>> { };
+
+template <typename TChan, typename TVal>
+class MultiInput : NullableMultiInput<TChan, TVal> { };
 
 // Lift a constant into an input.
 template <typename TVal>
@@ -118,7 +139,7 @@ class BasicStateInput : public Input<TVal> {
 };
 
 template <typename TVal>
-class StateInput : public BasicStateInput<std::optional<TVal>> { }
+class StateInput : public BasicStateInput<std::optional<TVal>>, public Input<TVal> { };
 
 // DeviceAddress is a stupid type to use -- it's just an array so you hvae to pass a pointer.
 // And you can't use it as a map key.
