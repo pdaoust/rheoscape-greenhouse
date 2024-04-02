@@ -11,15 +11,17 @@ class InputToEventStream : public EventStream<std::optional<T>>, public Runnable
     std::optional<T> _lastSeenValue;
   
   public:
-    InputToEventStream(Input<T> wrappedInput, Runner)
-    : _wrappedInput(wrappedInput)
+    InputToEventStream(Input<T> wrappedInput, Runner runner)
+    :
+      _wrappedInput(wrappedInput),
+      Runnable(runner)
     { }
 
     void run() {
       std::optional<T> value = _wrappedInput.read();
       if (value != _lastSeenValue) {
         _lastSeenValue = value;
-        _emit(value);
+        EventStream<T>::_emit(value);
       }
     }
 };
@@ -134,7 +136,7 @@ class EventStreamDebouncer : public EventStream<T>, public Runnable {
       if (_previousEvent.has_value() && _previousEvent.value().timestamp + _delay <= millis()) {
         // The only way the previous delta event can be old enough is if it's settled down.
         // We emit the event with its original timestamp (which will now be at least as old as the debounce delay).
-        _emit(_previousEvent.value());
+        EventStream<T>::_emit(_previousEvent.value());
       }
     }
 };
@@ -149,10 +151,10 @@ class EventStreamSwitcher : public EventStream<TEvent> {
     EventStreamSwitcher(std::map<TIndex, EventStream<TEvent>> eventStreams, Input<TIndex> switchInput)
     :
       _eventStreams(eventStreams),
-      _switchInput(switch)
+      _switchInput(switchInput)
     {
       for (std::pair<const TIndex, EventStream<TEvent>>& stream : _eventStreams) {
-        stream.second.registerSubscriber([stream, this](Event<TEvent> v) { this->receiveEventWithStreamIndex(stream.first, v); })
+        stream.second.registerSubscriber([stream, this](Event<TEvent> v) { this->receiveEventWithStreamIndex(stream.first, v); });
       }
     }
 
