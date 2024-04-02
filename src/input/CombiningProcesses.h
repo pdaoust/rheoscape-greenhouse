@@ -2,6 +2,7 @@
 #define RHEOSCAPE_COMBINING_PROCESSES_H
 
 #include <input/Input.h>
+#include <Range.h>
 
 // Merges two inputs of the same type into one range input.
 template <typename T>

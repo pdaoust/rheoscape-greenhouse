@@ -1,6 +1,7 @@
 #ifndef RHEOSCAPE_FANCY_PUSHBUTTON_H
 #define RHEOSCAPE_FANCY_PUSHBUTTON_H
 
+#include <input/GpioInputs.h>
 #include <event_stream/EventStream.h>
 #include <event_stream/EventStreamProcesses.h>
 

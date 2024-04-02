@@ -2,6 +2,7 @@
 #define RHEOSCAPE_CONTROL_PROCESSES_H
 
 #include <input/Input.h>
+#include <Range.h>
 
 enum ProcessControlDirection {
   up,
