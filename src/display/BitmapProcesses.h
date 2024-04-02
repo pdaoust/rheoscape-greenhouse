@@ -4,6 +4,8 @@
 #include <display/Bitmap.h>
 #include <display/Canvas.h>
 #include <input/Input.h>
+#include <input/CombiningProcesses.h>
+#include <input/TranslatingProcesses.h>
 
 template <typename TBitmapIn>
 class BitmapBoxingProcess : public Input<Bitmap16> {

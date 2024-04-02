@@ -3,6 +3,7 @@
 
 #include <Adafruit_GFX.h>
 #include <display/Bitmap.h>
+#include <display/BitmapDrawingHelper.h>
 
 template <typename TGfxCanvas, typename TBitmapOut, BitDepth BitDepth>
 class Canvas {
