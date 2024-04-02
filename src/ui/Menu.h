@@ -6,36 +6,65 @@
 #include <ui/Widget.h>
 
 template <typename TBitmap>
+struct MenuItem {
+  Widget<TBitmap> widget;
+  BasicStateInput<bool> selected;
+};
+
+template <typename TBitmap>
 class Menu : public InteractiveWidget { 
   private:
-    std::vector<Widget> _items;
-    std::vector<uint8_t> _selectableItems;
+    std::vector<MenuItem<TBitmap>> _items;
     uint8_t _selectedItemIndex;
 
     virtual std::optional<TBitmap> _draw(StyleRule style) {
 
     };
 
-    virtual bool _handleEventAndShouldBubble(Event<NavButtonClusterEvent> event) {
+    virtual bool _handleSelectedEventAndShouldBubble(Event<NavButtonClusterEvent> event) {
       switch (true) {
         case event.event.isPressed(navbutton_up):
-          if (_selectedItemIndex == 0) {
-            // Already at the top of the list.
-            return false;
-          }
+          _selectNextItem(-1);
+          break;
 
+        case event.event.isPressed(navbutton_down):
+          _selectNextItem(1);
+          break;
+      }
+
+      // Never bubble, because all the children's event streams are already piped through this one.
+      // Including the selected child.
+      // FIXME: Is this a performance problem? Should I be doing some sort of smart routing of events instead?
+      return false;
+    }
+  
+    void _selectNextItem(int8_t direction) {
+      uint8_t previouslySelectedItem = _selectedIndex;
+      uint8_t i = _selectedItemIndex;
+      while (i > 0 && i < _items.size() - 1) {
+        i += direction;
+        if (_items[i].isSelectable()) {
+          _selectedItemIndex = i;
+          _items[i].selected.write(true);
+          _items[previouslySelectedItem].selected.write(false);
+          return;
+        }
       }
     }
 
   public:
-    Menu(std::vector<Widget> items, BasicInput<bool> enabled, BasicInput<bool> visible, BasicInput<bool> selected, BasicInput<WidgetStyleRules> styleRules, EventStream<NavButtonClusterEvent> eventStream)
-    : InteractiveWidget(enabled, visible, selected, styleRules, eventStream), _items(items) {
-      // Enumerate the selectable menu items' vector indices into a list.
-      // This saves us a lot of time later.
-      for (uint8_t i = 0; i < items.size(); i ++) {
-        if (items[i].isSelectable())
-          _selectableItems[] = i;
-      }      
+    Menu(BasicInput<bool> enabled, BasicInput<bool> visible, BasicInput<bool> selected, BasicInput<WidgetStyleRules> styleRules, EventStream<NavButtonClusterEvent> eventStream)
+    : InteractiveWidget(enabled, visible, selected, styleRules, eventStream)
+    { }
+
+    void addChild(std::function<(BasicInput<bool>), Widget<TBitmap>> bind) {
+      BasicStateInput<bool> selected();
+      BasicFunctionInput<bool> conditionalSelected([this, selected]() { return this.isSelected() && selected.read(); });
+      MenuItem<TBitmap> menuItem = {
+        bind(conditionalSelected),
+        selected;
+      };
+      _items.push_back(menuItem);
     }
 };
 

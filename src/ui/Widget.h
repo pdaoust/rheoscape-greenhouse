@@ -14,13 +14,16 @@ class Widget : public Input<TBitmap> {
   protected:
     BasicInput<bool> _enabled;
     BasicInput<bool> _visible;
+    BasicInput<bool> _selected;
 
     virtual StyleRule _chooseStyleRule() {
       WidgetStyleRules styleRules = _styleRules.read();
-      if (!_enabled.read()) {
-        return styleRules.disabled;
-      } else {
+      if (_selected.read()) {
+        return styleRules.selected;
+      } else if (_enabled.read()) {
         return styleRules.base;
+      } else {
+        return styleRules.disabled;
       }
     }
 
@@ -29,6 +32,14 @@ class Widget : public Input<TBitmap> {
   public:
     Widget(BasicInput<bool> enabled, BasicInput<bool> visible, BasicInput<WidgetStyleRules> styleRules)
     : _selected(selected), _enabled(enabled), _visible(visible), _styleRules(styleRules) { }
+
+    Widget(BasicInput<WidgetStyleRules> styleRules)
+    : Widget(BasicInput<bool>(), BasicInput<bool>(), styleRules) { }
+
+    void rebind(BasicInput<bool> enabled, BasicInput<bool> visible) {
+      _enabled = enabled;
+      _visible = visible;
+    }
 
     std::optional<TBitmap> read() {
       if (!visible.read()) {
@@ -45,51 +56,20 @@ class Widget : public Input<TBitmap> {
     virtual bool isSelectable() {
       return false;
     }
-
-    virtual bool isEnterable() {
-      return false;
-    }
-};
-
-// A non-interactive widget that nevertheless can have a selected style --
-// for example, the label of an input widget in a menu item.
-template <typename TBitmap>
-class SelectableWidget : public Widget<TBitmap> {
-  private:
-    BasicInput<SelectableWidgetStyleRules> _styleRules;
-
-  protected:
-    BasicInput<bool> _selected;
-
-    virtual std::optional<StyleRule> _chooseStyleRule() {
-      SelectableWidgetStyleRules styleRules = _styleRules.read();
-      WidgetStyleRules styleRules = _styleRules.read().value();
-      if (!_enabled.read()) {
-        return styleRules.disabled;
-      } else if (_selected.read()) {
-        return styleRules.selected;
-      } else {
-        return styleRules.base;
-      }
-    }
-
-  public:
-    SelectableWidget(BasicInput<bool> enabled, BasicInput<bool> visible, BasicInput<bool> selected, BasicInput<SelectableWidgetStyleRules> styleRules)
-    : Widget(enabled, visible, styleRules), _selected(selected) { }
-
-    bool isSelected() {
-      return _selected.read();
-    }
-
-    virtual bool isSelectable() {
-      return _enabled.read();
-    }
 };
 
 template <typename TBitmap>
 class InteractiveWidget : public Widget<TBitmap>, public EventStream<NavButtonClusterEvent> {
   protected:
     virtual bool _handleEventAndShouldBubble(Event<NavButtonClusterEvent> event) {
+      if (_selected.read()) {
+        return _handleSelectedEventAndShouldBubble(event);
+      }
+      return true;
+    }
+
+    // Override this in your class.
+    virtual bool _handleSelectedEventAndShouldBubble(Event<NavButtonClusterEvent> event) {
       return true;
     }
 
@@ -102,90 +82,93 @@ class InteractiveWidget : public Widget<TBitmap>, public EventStream<NavButtonCl
         }
       });
     }
+
+    InteractiveWidget(BasicInput<SelectableWidgetStyleRules> styleRules, EventStream<NavButtonClusterEvent> eventStream)
+    : InteractiveWidget(BasicInput<bool>(), BasicInput<bool>(), BasicInput<bool>(), styleRules, eventStream) { }
+
+    virtual bool isSelectable() {
+      return isEnabled();
+    }
 };
 
+// Any sort of interactive widget that requres a press of the 'OK' button
+// to enter its
 template <typename TBitmap>
 class EnterableWidget : public InteractiveWidget<TBitmap> {
   protected:
-    BasicStateInput<bool> _entered;
+    bool _entered;
 
-    virtual bool _handleEventAndShouldBubble(Event<NavButtonClusterEvent> event) {
-      if (!_enabled.read()) {
-        return true;
-      }
-
+    virtual bool _handleSelectedEventAndShouldBubble(Event<NavButtonClusterEvent> event) {
       switch (true) {
         case event.event.isPressed(navbutton_ok):
-          _entered.write(true);
+          // We always capture the 'OK' button because it lets us enter and exit the widget.
+          if (!_entered) {
+            _entered = true;
+            _handleEnter();
+          } else {
+            _entered = false;
+            _handleExit(true);
+          }
           return false;
+        
+        case event.event.isPressed(navbutton_back):
+          if (!_entered) {
+            return true;
+          } else {
+            _entered = false;
+            _handleExit(false);
+            return false;
+          }
+
+        default:
+          if (_entered) {
+            return _handleEnteredEventAndShouldBubble(event);
+          }
+          return true;
       }
     }
 
-  public:
-    EnterableWidget()
-
-    bool isEnterable() {
-      return enabled.read();
+    // Override this function to handle all button events that your widget should capture.
+    virtual bool _handleEnteredEventAndShouldBubble(Event<NavButtonClusterEvent> event) {
+      return true;
     }
+
+    // Override this function if you need to do any setup.
+    virtual bool _handleEnter() { }
+
+    // Override this function if you need to do any teardown.
+    virtual void _handleExit(bool okPressed) { }
+
+  public:
+    EnterableWidget(BasicInput<bool> enabled, BasicInput<bool> visible, BasicInput<bool> selected, BasicInput<WidgetStyleRules> styleRules, EventStream<NavButtonClusterEvent> eventStream)
+    : InteractiveWidget(enabled, visible, selected, styleRules, eventStream) { }
 };
 
-// An input of some sort that can have focus.
+// An input of some sort that, when you enter it, allows a value to be edited.
+// Make sure you override _handleEnteredEventAndShouldBubble() in derived classes.
 template <typename TBitmap, typename TEditable>
-class EditableWidget : public InteractiveWidget<TBitmap> {
+class EditableWidget : public EnterableWidget<TBitmap> {
   private:
-    BasicInput<EditableWidgetStyleRules> _styleRules;
+    BasicInput<WidgetStyleRules> _styleRules;
     BasicStateInput<TEditable> _value;
     std::optional<TEditable> _editBuffer;
 
   protected:
-    virtual StyleRule _chooseStyleRule() {
-      EditableWidgetStyleRules styleRules = _styleRules.read();
-      if (!_enabled.read()) {
-        return styleRules.disabled;
-      } else if (_editing.read()) {
-        return styleRules.editable;
-      } else if (_selected.read()) {
-        return styleRules.selected;
+    virtual void handleEnter() {
+      _editBuffer = _value.read();
+    }
+
+    virtual void handleExit(bool okPressed) {
+      if (okPressed) {
+        _value.write(_editBuffer.value());
       } else {
-        return styleRules.base;
+        _editBuffer = std::nullopt;
       }
-    }
-
-    // Handle event and decide whether to bubble it.
-    // The return value says whether to bubble.
-    // Probably a code smell, but I don't care.
-    virtual bool _handleEventAndShouldBubble(Event<NavButtonClusterEvent> event) {
-      switch (true) {
-        case _editing.read():
-          switch (true) {
-            case event.value.isPressed(navbutton_ok):
-              _value.write(_editBuffer.value());
-              _editing.write(false);
-              return false;
-            
-            case event.value.isPressed(navbutton_back):
-              _editBuffer = std::nullopt;
-              _editing.write(false);
-              return false;
-            
-            default:
-              return _handleEditEventAndShouldBubble(event);
-          }
-        
-        // When an item is selected but not focused, capture the ok event only to start editing.
-        case selected.read() && event.value.isPressed(navbutton_ok):
-          _editBuffer = _value.read();
-          _editing.write(true);
-      }
-    }
-
-    virtual bool _handleEditEventAndShouldBubble(Event<NavButtonClusterEvent> event) {
-      return true;
     }
 
   public:
-    EditableWidget(BasicStateInput<TValue> value, BasicInput<bool> enabled, BasicInput<bool> visible, BasicInput<bool> selected, BasicStateInput<bool> editing, BasicInput<WidgetStyleRules> styleRules, EventStream<NavButtonClusterEvent> eventStream)
-    : InteractiveWidget(enabled, visible, selected, styleRules), _value(value), _editing(editing) { }
+    EditableWidget(BasicStateInput<TValue> value, BasicInput<bool> enabled, BasicInput<bool> visible, BasicInput<bool> selected, BasicInput<WidgetStyleRules> styleRules, EventStream<NavButtonClusterEvent> eventStream)
+    : EnterableWidget(enabled, visible, selected, styleRules), _value(value) { }
 };
 
 #endif

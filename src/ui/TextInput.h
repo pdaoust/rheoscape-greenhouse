@@ -11,7 +11,7 @@
 #include <ui/Widget.h>
 
 template <typename TBitmap>
-class TextInputWidget : public InteractiveWidget<TBitmap, NavButtonClusterEvent> {
+class TextInputWidget : public EditableWidget<TBitmap, NavButtonClusterEvent> {
   private:
     Input<std::string> _value;
     uint8_t _cursorPosition;

@@ -128,23 +128,10 @@ class StyleRule {
 struct WidgetStyleRules {
   StyleRule base;
   StyleRule disabled;
+  StyleRule focused;
 
-  WidgetStyleRules(StyleRule base, StyleRule disabled)
-  : base(base), disabled(disabled) { }
-};
-
-struct InteractiveWidgetStyleRules : public WidgetStyleRules {
-  StyleRule selected;
-
-  InteractiveWidgetStyleRules(StyleRule base, StyleRule disabled, StyleRule selected)
-  : WidgetStyleRules(base, disabled), selected(selected) { }
-};
-
-struct EditableWidgetStyleRules : public SelectableWidgetStyleRules {
-  StyleRule editing;
-
-  EditableWidgetStyleRules(StyleRule base, StyleRule disabled, StyleRule selected, StyleRule editing)
-  : InteractiveWidgetStyleRules(base, disabled, selected), editing(editing) { }
+  WidgetStyleRules(StyleRule base, StyleRule disabled, StyleRule focused)
+  : base(base), disabled(disabled), focused(focused) { }
 };
 
 struct Theme {
@@ -152,13 +139,13 @@ struct Theme {
   // Non-interactive text -- input labels, for instance.
   WidgetStyleRules text;
   // Text/number boxes and unopened select boxes.
-  EditableWidgetStyleRules input;
+  WidgetStyleRules input;
   // Wrapper around things that appear in a menu, like labels and inputs.
-  InteractiveWidgetStyleRules menuItem;
-  InteractiveWidgetStyleRules tab;
-  InteractiveWidgetStyleRules button;
+  WidgetStyleRules menuItem;
+  WidgetStyleRules tab;
+  WidgetStyleRules button;
   // Checkbox or radio button.
-  InteractiveWidgetStyleRules checkAndRadio;
+  WidgetStyleRules checkAndRadio;
   WidgetStyleRules modalContainer;
 };
 
