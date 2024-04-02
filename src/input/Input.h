@@ -17,13 +17,8 @@
 #include <Timer.h>
 #include <Range.h>
 
-// TODO: transition over to a choice between a non-nullable input or a nullable one.
-//
-// 1. Delete `Input`
-// 2. Rename `BasicInput` to `Input`
-// 3. optional: rename `NullableInput` to something shorter?
 template <typename T>
-class BasicInput {
+class Input {
   private:
     static T default_t;
 
@@ -32,65 +27,59 @@ class BasicInput {
 };
 
 template <typename T>
-class BasicFunctionInput : BasicInput<T> {
+class FunctionInput : Input<T> {
   private:
     std::function<T()> _computeValue;
   
   public:
-    BasicFunctionInput(std::function<T()> computeValue)
+    FunctionInput(std::function<T()> computeValue)
     : _computeValue(computeValue) { }
 
     virtual T read() { return _computeValue(); }
 };
 
-template <typename T>
-class NullableInput : BasicInput<std::optional<T>> { };
-
 template <typename TChan, typename TVal>
-class BasicMultiInput {
-    private:
-      static TVal default_t;
+class MultiInput {
+  private:
+    static TVal default_t;
 
-    public:
-      virtual TVal readChannel(TChan channel) { return default_t; };
+  public:
+    virtual TVal readChannel(TChan channel) { return default_t; };
 
-      BasicInput<TVal> getInputForChannel(TChan channel);
+    Input<TVal> getInputForChannel(TChan channel);
 };
 
 template <typename TChan, typename TVal>
-class SingleChannelOfBasicMultiInput {
+class SingleChannelOfMultiInput : public Input<TVal> {
   private:
-    BasicMultiInput<TChan, TVal>& _wrappedInput;
+    MultiInput<TChan, TVal>& _wrappedInput;
     TChan _channel;
 
   public:
-    SingleChannelOfBasicMultiInput(BasicMultiInput<TChan, TVal>& wrappedInput, TChan channel)
+    SingleChannelOfMultiInput(MultiInput<TChan, TVal>& wrappedInput, TChan channel)
       :
         _wrappedInput(wrappedInput),
         _channel(channel)
       { }
 
-    std::optional<TVal> read() {
+    TVal read() {
       return _wrappedInput.readChannel(_channel);
     }
 };
 
 template <typename TChan, typename TVal>
-BasicInput<TVal> BasicMultiInput<TChan, TVal>::getInputForChannel(TChan channel) {
-  return SingleChannelOfBasicMultiInput<TChan, TVal>(*this, channel);
+Input<TVal> MultiInput<TChan, TVal>::getInputForChannel(TChan channel) {
+  return SingleChannelOfMultiInput<TChan, TVal>(*this, channel);
 }
-
-template <typename TChan, typename TVal>
-class NullableMultiInput : BasicMultiInput<TChan, std::optional<TVal>> { };
 
 // Lift a constant into an input.
 template <typename T>
-class BasicConstantInput : public BasicInput<T> {
+class ConstantInput : public Input<T> {
   private:
     T _value;
 
   public:
-    BasicConstantInput(T value) : _value(value) { }
+    ConstantInput(T value) : _value(value) { }
 
     T read() {
       return _value;
@@ -99,13 +88,13 @@ class BasicConstantInput : public BasicInput<T> {
 
 // Special case that gets used a lot.
 template <typename T>
-BasicInput<Range<T>> makeRangeConstantInput(T min, T max) {
-  return BasicConstantInput<Range<T>>(Range<T>{ min, max });
+Input<Range<T>> makeRangeConstantInput(T min, T max) {
+  return ConstantInput<Range<T>>(Range<T>{ min, max });
 }
 
 // A simple input that just returns whatever the value currently is at the pointer passed to it.
 template <typename T>
-class PointerInput : public BasicInput<T> {
+class PointerInput : public Input<T> {
   private:
     T* _pointer;
 
@@ -119,7 +108,7 @@ class PointerInput : public BasicInput<T> {
 
 // A simple input whose value can be set.
 template <typename T>
-class BasicStateInput : public BasicInput<T> {
+class StateInput : public Input<T> {
   private:
     T _value;
 
@@ -152,7 +141,7 @@ uint64_t deviceAddressToInt(DeviceAddress deviceAddress) {
   return address;
 }
 
-class Ds18b20 : public BasicMultiInput<uint64_t, std::optional<float>> {
+class Ds18b20 : public MultiInput<uint64_t, std::optional<float>> {
   private:
     DallasTemperature _inputs;
     std::vector<uint64_t> _deviceAddresses;
@@ -230,7 +219,7 @@ enum class Sht21Channel {
   humidity
 };
 
-class Sht21 : public BasicMultiInput<Sht21Channel, std::optional<float>> {
+class Sht21 : public MultiInput<Sht21Channel, std::optional<float>> {
   private:
     SHT21 _input;
     float _tempOffset;
@@ -308,7 +297,7 @@ enum class Bme280Channel {
   pressureKpa
 };
 
-class Bme280 : public BasicMultiInput<Bme280Channel, std::optional<float>> {
+class Bme280 : public MultiInput<Bme280Channel, std::optional<float>> {
   private:
     BME280_DEV _input;
     float _tempOffset;
@@ -356,7 +345,7 @@ class Bme280 : public BasicMultiInput<Bme280Channel, std::optional<float>> {
     }
 };
 
-class Bh1750 : public BasicInput<std::optional<float>> {
+class Bh1750 : public Input<std::optional<float>> {
   private:
     BH1750 _lightMeter;
     RepeatTimer _timer;
@@ -387,7 +376,7 @@ class Bh1750 : public BasicInput<std::optional<float>> {
     }
 };
 
-class DigitalPinInput : public BasicInput<bool> {
+class DigitalPinInput : public Input<bool> {
   private:
     uint8_t _pin;
     bool _onState;
@@ -407,7 +396,7 @@ class DigitalPinInput : public BasicInput<bool> {
     }
 };
 
-class AnalogPinInput : public BasicInput<float> {
+class AnalogPinInput : public Input<float> {
   private:
     uint8_t _pin;
     static uint8_t _resolution;

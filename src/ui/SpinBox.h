@@ -11,10 +11,10 @@
 template <typename TNum, typename TBitmap>
 class SpinBox : public EditableWidget<TBitmap, NavButtonClusterEvent> {
   protected:
-    BasicStateInput<TNum> _value;
-    BasicInput<TNum> _step;
+    StateInput<TNum> _value;
+    Input<TNum> _step;
     std::optional<TNum> _editBuffer;
-    BasicInput<Range<TNum>> _range;
+    Input<Range<TNum>> _range;
 
     virtual std::optional<TBitmap> _draw() {
 
@@ -46,7 +46,7 @@ class SpinBox : public EditableWidget<TBitmap, NavButtonClusterEvent> {
     }
   
   public:
-    SpinBox(BasicStateInput<TNum> value, BasicInput<TNum> step, BasicInput<Range<TNum>> range, BasicInput<bool> enabled, BasicInput<bool> visible, BasicInput<bool> selected, BasicStateInput<bool> editing, BasicInput<WidgetStyleRules> styleRules, EventStream<TEvent> eventStream)
+    SpinBox(StateInput<TNum> value, Input<TNum> step, Input<Range<TNum>> range, Input<bool> enabled, Input<bool> visible, Input<bool> selected, StateInput<bool> editing, Input<WidgetStyleRules> styleRules, EventStream<TEvent> eventStream)
     :
       EditableWidget(value, enabled, visible, selected, editing, styleRules, eventStream),
       _step(step),

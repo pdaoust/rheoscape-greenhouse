@@ -9,12 +9,12 @@
 template <typename TBitmap>
 class Widget : public Input<TBitmap> {
   private:
-    BasicInput<WidgetStyleRules> _styleRules;
+    Input<WidgetStyleRules> _styleRules;
 
   protected:
-    BasicInput<bool> _enabled;
-    BasicInput<bool> _visible;
-    BasicInput<bool> _selected;
+    Input<bool> _enabled;
+    Input<bool> _visible;
+    Input<bool> _selected;
 
     virtual StyleRule _chooseStyleRule() {
       WidgetStyleRules styleRules = _styleRules.read();
@@ -30,13 +30,13 @@ class Widget : public Input<TBitmap> {
     virtual std::optional<TBitmap> _draw(StyleRule style);
 
   public:
-    Widget(BasicInput<bool> enabled, BasicInput<bool> visible, BasicInput<WidgetStyleRules> styleRules)
+    Widget(Input<bool> enabled, Input<bool> visible, Input<WidgetStyleRules> styleRules)
     : _selected(selected), _enabled(enabled), _visible(visible), _styleRules(styleRules) { }
 
-    Widget(BasicInput<WidgetStyleRules> styleRules)
-    : Widget(BasicInput<bool>(), BasicInput<bool>(), styleRules) { }
+    Widget(Input<WidgetStyleRules> styleRules)
+    : Widget(Input<bool>(), Input<bool>(), styleRules) { }
 
-    void rebind(BasicInput<bool> enabled, BasicInput<bool> visible) {
+    void rebind(Input<bool> enabled, Input<bool> visible) {
       _enabled = enabled;
       _visible = visible;
     }
@@ -74,7 +74,7 @@ class InteractiveWidget : public Widget<TBitmap>, public EventStream<NavButtonCl
     }
 
   public:
-    InteractiveWidget(BasicInput<bool> enabled, BasicInput<bool> visible, BasicInput<bool> selected, BasicInput<WidgetStyleRules> styleRules, EventStream<NavButtonClusterEvent> eventStream)
+    InteractiveWidget(Input<bool> enabled, Input<bool> visible, Input<bool> selected, Input<WidgetStyleRules> styleRules, EventStream<NavButtonClusterEvent> eventStream)
     : Widget(enabled, visible, selected, styleRules) {
       eventStream.registerSubscriber([this](Event<NavButtonClusterEvent> event) {
         if (this->_handleEventAndShouldBubble(event)) {
@@ -83,8 +83,8 @@ class InteractiveWidget : public Widget<TBitmap>, public EventStream<NavButtonCl
       });
     }
 
-    InteractiveWidget(BasicInput<SelectableWidgetStyleRules> styleRules, EventStream<NavButtonClusterEvent> eventStream)
-    : InteractiveWidget(BasicInput<bool>(), BasicInput<bool>(), BasicInput<bool>(), styleRules, eventStream) { }
+    InteractiveWidget(Input<SelectableWidgetStyleRules> styleRules, EventStream<NavButtonClusterEvent> eventStream)
+    : InteractiveWidget(Input<bool>(), Input<bool>(), Input<bool>(), styleRules, eventStream) { }
 
     virtual bool isSelectable() {
       return isEnabled();
@@ -140,7 +140,7 @@ class EnterableWidget : public InteractiveWidget<TBitmap> {
     virtual void _handleExit(bool okPressed) { }
 
   public:
-    EnterableWidget(BasicInput<bool> enabled, BasicInput<bool> visible, BasicInput<bool> selected, BasicInput<WidgetStyleRules> styleRules, EventStream<NavButtonClusterEvent> eventStream)
+    EnterableWidget(Input<bool> enabled, Input<bool> visible, Input<bool> selected, Input<WidgetStyleRules> styleRules, EventStream<NavButtonClusterEvent> eventStream)
     : InteractiveWidget(enabled, visible, selected, styleRules, eventStream) { }
 };
 
@@ -149,8 +149,8 @@ class EnterableWidget : public InteractiveWidget<TBitmap> {
 template <typename TBitmap, typename TEditable>
 class EditableWidget : public EnterableWidget<TBitmap> {
   private:
-    BasicInput<WidgetStyleRules> _styleRules;
-    BasicStateInput<TEditable> _value;
+    Input<WidgetStyleRules> _styleRules;
+    StateInput<TEditable> _value;
     std::optional<TEditable> _editBuffer;
 
   protected:
@@ -167,7 +167,7 @@ class EditableWidget : public EnterableWidget<TBitmap> {
     }
 
   public:
-    EditableWidget(BasicStateInput<TValue> value, BasicInput<bool> enabled, BasicInput<bool> visible, BasicInput<bool> selected, BasicInput<WidgetStyleRules> styleRules, EventStream<NavButtonClusterEvent> eventStream)
+    EditableWidget(StateInput<TValue> value, Input<bool> enabled, Input<bool> visible, Input<bool> selected, Input<WidgetStyleRules> styleRules, EventStream<NavButtonClusterEvent> eventStream)
     : EnterableWidget(enabled, visible, selected, styleRules), _value(value) { }
 };
 

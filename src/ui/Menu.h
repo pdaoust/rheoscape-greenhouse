@@ -8,7 +8,7 @@
 template <typename TBitmap>
 struct MenuItem {
   Widget<TBitmap> widget;
-  BasicStateInput<bool> selected;
+  StateInput<bool> selected;
 };
 
 template <typename TBitmap>
@@ -53,13 +53,13 @@ class Menu : public InteractiveWidget {
     }
 
   public:
-    Menu(BasicInput<bool> enabled, BasicInput<bool> visible, BasicInput<bool> selected, BasicInput<WidgetStyleRules> styleRules, EventStream<NavButtonClusterEvent> eventStream)
+    Menu(Input<bool> enabled, Input<bool> visible, Input<bool> selected, Input<WidgetStyleRules> styleRules, EventStream<NavButtonClusterEvent> eventStream)
     : InteractiveWidget(enabled, visible, selected, styleRules, eventStream)
     { }
 
-    void addChild(std::function<(BasicInput<bool>), Widget<TBitmap>> bind) {
-      BasicStateInput<bool> selected();
-      BasicFunctionInput<bool> conditionalSelected([this, selected]() { return this.isSelected() && selected.read(); });
+    void addChild(std::function<(Input<bool>), Widget<TBitmap>> bind) {
+      StateInput<bool> selected();
+      FunctionInput<bool> conditionalSelected([this, selected]() { return this.isSelected() && selected.read(); });
       MenuItem<TBitmap> menuItem = {
         bind(conditionalSelected),
         selected;

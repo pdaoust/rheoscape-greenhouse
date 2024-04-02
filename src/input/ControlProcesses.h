@@ -14,14 +14,14 @@ enum ProcessControlDirection {
 // and tries to drive the control down when the input is above the setpoint max.
 // In between the two, it tries to keep the control stable.
 template <typename T>
-class BangBangProcess : public BasicInput<ProcessControlDirection> {
+class BangBangProcess : public Input<ProcessControlDirection> {
   protected:
-    BasicInput<T> _valueInput;
-    BasicInput<Range<T>> _setpointRangeInput;
+    Input<T> _valueInput;
+    Input<Range<T>> _setpointRangeInput;
     ProcessControlDirection _outputDirection;
 
   public:
-    BangBangProcess(BasicInput<T> valueInput, BasicInput<Range<T>> setpointRangeInput)
+    BangBangProcess(Input<T> valueInput, Input<Range<T>> setpointRangeInput)
     :
       _valueInput(valueInput),
       _setpointRangeInput(setpointRangeInput)
@@ -46,9 +46,9 @@ class BangBangProcess : public BasicInput<ProcessControlDirection> {
 // This one converts a bang-bang input to a boolean, suitable for a switch.
 // The behaviour when it receives a neutral input depends on its prior state.
 // If it was previously up, it keeps it up, and vice versa.
-class DirectionToBooleanProcess : public BasicInput<bool> {
+class DirectionToBooleanProcess : public Input<bool> {
   private:
-    BasicInput<ProcessControlDirection> _wrappedInput;
+    Input<ProcessControlDirection> _wrappedInput;
     std::optional<ProcessControlDirection> _lastNonNeutralInputValue;
     bool _initialState;
     bool _upIs;
@@ -67,7 +67,7 @@ class DirectionToBooleanProcess : public BasicInput<bool> {
     #pragma GCC diagnostic pop
 
   public:
-    DirectionToBooleanProcess(BasicInput<ProcessControlDirection> wrappedInput, bool upIs, bool initialState = false)
+    DirectionToBooleanProcess(Input<ProcessControlDirection> wrappedInput, bool upIs, bool initialState = false)
     :
       _wrappedInput(wrappedInput),
       _upIs(upIs),

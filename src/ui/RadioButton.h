@@ -6,7 +6,7 @@
 template <typename TBitmap, typename TOption>
 class RadioButton : public SelectableWidget<TBitmap, NavButtonClusterEvent> {
   private:
-    BasicStateInput<TOption> _selectedOption;
+    StateInput<TOption> _selectedOption;
     TOption _optionId;
 
     virtual std::optional<TBitmap> _draw() {
@@ -28,7 +28,7 @@ class RadioButton : public SelectableWidget<TBitmap, NavButtonClusterEvent> {
     }
   
   public:
-    RadioButton(BasicStateInput<TOption> selectedOption, TOption optionId, BasicInput<bool> enabled, BasicInput<bool> visible, BasicInput<bool> selected, BasicInput<WidgetStyleRules> styleRules, EventStream<TEvent> eventStream)
+    RadioButton(StateInput<TOption> selectedOption, TOption optionId, Input<bool> enabled, Input<bool> visible, Input<bool> selected, Input<WidgetStyleRules> styleRules, EventStream<TEvent> eventStream)
     : InteractiveWidget(enabled, visible, selected, styleRules, eventStream), _selectedOption(selectedOption), _optionId(optionId) { }
 };
 

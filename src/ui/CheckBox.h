@@ -6,7 +6,7 @@
 template <typename TBitmap>
 class CheckBox : public SelectableWidget<TBitmap, NavButtonClusterEvent> {
   private:
-    BasicStateInput<bool> _value;
+    StateInput<bool> _value;
 
     virtual std::optional<TBitmap> _draw() {
 
@@ -27,7 +27,7 @@ class CheckBox : public SelectableWidget<TBitmap, NavButtonClusterEvent> {
     }
   
   public:
-    CheckBox(BasicStateInput<bool> value, BasicInput<bool> enabled, BasicInput<bool> visible, BasicInput<bool> selected, BasicInput<WidgetStyleRules> styleRules, EventStream<TEvent> eventStream)
+    CheckBox(StateInput<bool> value, Input<bool> enabled, Input<bool> visible, Input<bool> selected, Input<WidgetStyleRules> styleRules, EventStream<TEvent> eventStream)
     : InteractiveWidget(enabled, visible, selected, styleRules, eventStream), _value(value) { }
 };
 

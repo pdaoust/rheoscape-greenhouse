@@ -5,14 +5,14 @@
 
 // Take 'continuous' values and 'snap' them to a time interval.
 template <typename T>
-class TimeQuantisingProcess : public BasicInput<T> {
+class TimeQuantisingProcess : public Input<T> {
   private:
-    BasicInput<T> _wrappedInput;
+    Input<T> _wrappedInput;
     RepeatTimer _timer;
     std::optional<T> _lastReadValue;
   
   public:
-    TimeQuantisingProcess(BasicInput<T> wrappedInput, unsigned long interval)
+    TimeQuantisingProcess(Input<T> wrappedInput, unsigned long interval)
     :
       _wrappedInput(wrappedInput),
       _timer(RepeatTimer(
@@ -33,15 +33,15 @@ class TimeQuantisingProcess : public BasicInput<T> {
 // Don't let a value change more frequently than every n milliseconds.
 // Kinda like TimeQuantisingProcess, except it doesn't 'snap' to the interval.
 template <typename T>
-class ThrottlingProcess : public BasicInput<T> {
+class ThrottlingProcess : public Input<T> {
   private:
-    BasicInput<T> _wrappedInput;
+    Input<T> _wrappedInput;
     unsigned long _minDelay;
     T _lastReadValue;
     Timer _timer;
 
   public:
-    ThrottlingProcess(BasicInput<T> wrappedInput, unsigned long minDelay)
+    ThrottlingProcess(Input<T> wrappedInput, unsigned long minDelay)
     :
       _wrappedInput(wrappedInput),
       _minDelay(minDelay),
@@ -68,15 +68,15 @@ class ThrottlingProcess : public BasicInput<T> {
 
 // Convert a boolean input to another boolean input,
 // where true is converted to a true/false pulse.
-class BlinkingProcess : public BasicInput<bool> {
+class BlinkingProcess : public Input<bool> {
   private:
-    BasicInput<bool> _wrappedInput;
+    Input<bool> _wrappedInput;
     RepeatTimer _fullCycleTimer;
     Timer _offTimer;
     unsigned long _onTime;
   
   public:
-    BlinkingProcess(BasicInput<bool> wrappedInput, unsigned long onTime, unsigned long offTime)
+    BlinkingProcess(Input<bool> wrappedInput, unsigned long onTime, unsigned long offTime)
     :
       _wrappedInput(wrappedInput),
       _onTime(onTime),
@@ -108,14 +108,14 @@ class BlinkingProcess : public BasicInput<bool> {
 };
 
 // Convert a 0..1 float to a boolean suitable for using in slow PWM outputs.
-class SlowPwmProcess : public BasicInput<bool> {
+class SlowPwmProcess : public Input<bool> {
   private:
     RepeatTimer _timer;
     bool _currentValue;
   
   public:
     SlowPwmProcess(
-      BasicInput<float> wrappedInput,
+      Input<float> wrappedInput,
       // The smallest discrete value in a cycle.
       unsigned long interval,
       // The number of intervals in a cycle. interval * resolution = cycle length.
@@ -148,16 +148,16 @@ class SlowPwmProcess : public BasicInput<bool> {
 // Of course, if the input goes back down to 10 the next second,
 // it'll head towards that value.
 template <typename T>
-class HysteresisProcess : public BasicInput<T> {
+class HysteresisProcess : public Input<T> {
   private:
-    BasicInput<T> _wrappedInput;
+    Input<T> _wrappedInput;
     unsigned long _interval;
     T _stepsPerInterval;
     T _lastValue;
     unsigned long _lastRun;
 
   public:
-    HysteresisProcess(BasicInput<T> wrappedInput, unsigned long interval, T stepsPerInterval)
+    HysteresisProcess(Input<T> wrappedInput, unsigned long interval, T stepsPerInterval)
     :
       _wrappedInput(wrappedInput),
       _interval(interval),
@@ -181,15 +181,15 @@ class HysteresisProcess : public BasicInput<T> {
 // Smooth a input reading over a moving average time interval in milliseconds,
 // using the exponential moving average or single-pole IIR method.
 template <typename T>
-class ExponentialMovingAverageProcess : public BasicInput<T> {
+class ExponentialMovingAverageProcess : public Input<T> {
   private:
-    BasicInput<T> _wrappedInput;
+    Input<T> _wrappedInput;
     unsigned long _averageOver;
     T _lastValue;
     unsigned long _lastRun;
   
   public:
-    ExponentialMovingAverageProcess(BasicInput<T> wrappedInput, unsigned long averageOver)
+    ExponentialMovingAverageProcess(Input<T> wrappedInput, unsigned long averageOver)
     :
       _wrappedInput(wrappedInput),
       _averageOver(averageOver)
@@ -213,15 +213,15 @@ class ExponentialMovingAverageProcess : public BasicInput<T> {
 
 // When the input goes true, emit true for a given number of milliseconds,
 // then revert to false regardless of whether the input is true or false.
-class TimedLatchProcess : public BasicInput<bool> {
+class TimedLatchProcess : public Input<bool> {
   private:
-    BasicInput<bool> _wrappedInput;
+    Input<bool> _wrappedInput;
     Timer _timer;
     unsigned long _timeout;
     bool _previousValue;
   
   public:
-    TimedLatchProcess(BasicInput<bool> wrappedInput, unsigned long timeout)
+    TimedLatchProcess(Input<bool> wrappedInput, unsigned long timeout)
     :
       _wrappedInput(wrappedInput),
       _timeout(timeout),

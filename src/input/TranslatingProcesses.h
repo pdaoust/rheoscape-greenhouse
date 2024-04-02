@@ -4,13 +4,13 @@
 #include <input/Input.h>
 
 template <typename TIn, typename TOut>
-class TranslatingProcess : public BasicInput<TOut> {
+class TranslatingProcess : public Input<TOut> {
   private:
-    BasicInput<TIn> _wrappedInput;
+    Input<TIn> _wrappedInput;
     const std::function<TOut(TIn)>& _translator;
 
   public:
-    TranslatingProcess(BasicInput<TIn> wrappedInput, const std::function<TOut(TIn)>& translator)
+    TranslatingProcess(Input<TIn> wrappedInput, const std::function<TOut(TIn)>& translator)
     :
       _wrappedInput(wrappedInput),
       _translator(translator)
@@ -24,7 +24,7 @@ class TranslatingProcess : public BasicInput<TOut> {
 template <typename TIn, typename TOut>
 class TranslatingNotEmptyProcess : public TranslatingProcess<std::optional<TIn>, TOut> {
   public:
-    TranslatingNotEmptyProcess(BasicInput<std::optional<TIn>> wrappedInput, const std::function<TOut(std::optional<TIn>)>& translator)
+    TranslatingNotEmptyProcess(Input<std::optional<TIn>> wrappedInput, const std::function<TOut(std::optional<TIn>)>& translator)
     : TranslatingProcess<TIn, TOut>(wrappedInput, [translator](std::optional<TIn> value) { return value.has_value() ? translator(value.value()) : value; })
     { }
 };

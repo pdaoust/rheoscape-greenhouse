@@ -5,13 +5,13 @@
 
 // Merges two inputs of the same type into one range input.
 template <typename T>
-class MergingRangeProcess : public BasicInput<Range<T>> {
+class MergingRangeProcess : public Input<Range<T>> {
   private:
-    BasicInput<T> _inputMin;
-    BasicInput<T> _inputMax;
+    Input<T> _inputMin;
+    Input<T> _inputMax;
   
   public:
-    MergingRangeProcess(BasicInput<T> inputMin, BasicInput<T> inputMax)
+    MergingRangeProcess(Input<T> inputMin, Input<T> inputMax)
     :
       _inputMin(inputMin),
       _inputMax(inputMax)
@@ -24,13 +24,13 @@ class MergingRangeProcess : public BasicInput<Range<T>> {
 
 // Merges two inputs into one tuple input.
 template <typename T1, typename T2>
-class Merging2Process : public BasicInput<std::tuple<T1, T2>> {
+class Merging2Process : public Input<std::tuple<T1, T2>> {
   private:
-    BasicInput<T1> _input1;
-    BasicInput<T2> _input2;
+    Input<T1> _input1;
+    Input<T2> _input2;
   
   public:
-    Merging2Process(BasicInput<T1> input1, BasicInput<T2> input2)
+    Merging2Process(Input<T1> input1, Input<T2> input2)
     :
       _input1(input1),
       _input2(input2)
@@ -42,13 +42,13 @@ class Merging2Process : public BasicInput<std::tuple<T1, T2>> {
 };
 
 template <typename T1, typename T2>
-class Merging2NotEmptyProcess : public BasicInput<std::optional<std::tuple<T1, T2>>> {
+class Merging2NotEmptyProcess : public Input<std::optional<std::tuple<T1, T2>>> {
   private:
-    BasicInput<std::optional<T1>> _input1;
-    BasicInput<std::optional<T2>> _input2;
+    Input<std::optional<T1>> _input1;
+    Input<std::optional<T2>> _input2;
   
   public:
-    Merging2NotEmptyProcess(BasicInput<std::optional<T1>> input1, BasicInput<std::optional<T2>> input2)
+    Merging2NotEmptyProcess(Input<std::optional<T1>> input1, Input<std::optional<T2>> input2)
     :
       _input1(input1),
       _input2(input2)
@@ -66,14 +66,14 @@ class Merging2NotEmptyProcess : public BasicInput<std::optional<std::tuple<T1, T
 };
 
 template <typename T1, typename T2, typename T3>
-class Merging3Process : public BasicInput<std::tuple<T1, T2, T3>> {
+class Merging3Process : public Input<std::tuple<T1, T2, T3>> {
   private:
-    BasicInput<T1> _input1;
-    BasicInput<T2> _input2;
-    BasicInput<T3> _input3;
+    Input<T1> _input1;
+    Input<T2> _input2;
+    Input<T3> _input3;
   
   public:
-    Merging3Process(BasicInput<T1> input1, BasicInput<T2> input2, BasicInput<T3> input3)
+    Merging3Process(Input<T1> input1, Input<T2> input2, Input<T3> input3)
     :
       _input1(input1),
       _input2(input2),
@@ -86,22 +86,22 @@ class Merging3Process : public BasicInput<std::tuple<T1, T2, T3>> {
 };
 
 template <typename TIn, typename TOut>
-class FoldProcess : public BasicInput<TOut> {
+class FoldProcess : public Input<TOut> {
   private:
-    std::vector<BasicInput<TIn>> _inputs;
+    std::vector<Input<TIn>> _inputs;
     std::function<TOut(TOut, TIn)> _foldFunction;
-    BasicInput<TOut> _initialValueInput;
+    Input<TOut> _initialValueInput;
 
   public:
-    FoldProcess(std::vector<BasicInput<TIn>> inputs, std::function<TOut(TOut, TIn)> foldFunction, BasicInput<TOut> initialValueInput)
+    FoldProcess(std::vector<Input<TIn>> inputs, std::function<TOut(TOut, TIn)> foldFunction, Input<TOut> initialValueInput)
     :
       _inputs(inputs),
       _foldFunction(foldFunction),
       _initialValueInput(initialValueInput)
     { }
 
-    FoldProcess(std::vector<BasicInput<TIn>> inputs, std::function<TOut(TOut, TIn)> foldFunction, TOut initialValue)
-    : FoldProcess(inputs, foldFunction, BasicConstantInput<TOut>(initialValue))
+    FoldProcess(std::vector<Input<TIn>> inputs, std::function<TOut(TOut, TIn)> foldFunction, TOut initialValue)
+    : FoldProcess(inputs, foldFunction, ConstantInput<TOut>(initialValue))
     { }
 
     TOut read() {
@@ -114,13 +114,13 @@ class FoldProcess : public BasicInput<TOut> {
 };
 
 template <typename T>
-class ReduceProcess : public BasicInput<T> {
+class ReduceProcess : public Input<T> {
   private:
-    std::vector<BasicInput<T>> _inputs;
+    std::vector<Input<T>> _inputs;
     std::function<T(T, T)> _reduceFunction;
 
   public:
-    ReduceProcess(std::vector<BasicInput<T>> inputs, std::function<T(T, T)> reduceFunction)
+    ReduceProcess(std::vector<Input<T>> inputs, std::function<T(T, T)> reduceFunction)
     : 
       _inputs(inputs),
       _reduceFunction(reduceFunction)
@@ -142,7 +142,7 @@ class ReduceProcess : public BasicInput<T> {
 template <typename TIn, typename TOut>
 class MapProcess : public FoldProcess<TIn, std::vector<TOut>> {
   public:
-    MapProcess(std::vector<BasicInput<TIn>> inputs, std::function<TOut(TIn)> mapFunction)
+    MapProcess(std::vector<Input<TIn>> inputs, std::function<TOut(TIn)> mapFunction)
     : FoldProcess<TIn, std::vector<TOut>>(
       inputs,
       [mapFunction](std::vector<TOut> acc, TIn value) {
@@ -151,19 +151,19 @@ class MapProcess : public FoldProcess<TIn, std::vector<TOut>> {
       },
       // Create a new vector every time.
       // I don't know if this is necessary, and maybe it even makes things worse.
-      BasicFunctionInput<std::vector<TOut>>([]() { return std::vector<TOut>(); })
+      FunctionInput<std::vector<TOut>>([]() { return std::vector<TOut>(); })
     )
     { }
 };
 
 template <typename T>
-class FilterProcess : public BasicInput<std::vector<T>> {
+class FilterProcess : public Input<std::vector<T>> {
   private:
-    std::vector<BasicInput<T>> _inputs;
+    std::vector<Input<T>> _inputs;
     std::function<bool(T)> _filterFunction;
   
   public:
-    FilterProcess(std::vector<BasicInput<T>> inputs, std::function<bool(T)> filterFunction)
+    FilterProcess(std::vector<Input<T>> inputs, std::function<bool(T)> filterFunction)
     :
       _inputs(inputs),
       _filterFunction(filterFunction)
@@ -184,13 +184,13 @@ class FilterProcess : public BasicInput<std::vector<T>> {
 template <typename T>
 class AvgProcess : public ReduceProcess<T> {
   private:
-    std::vector<BasicInput<T>> _inputs;
+    std::vector<Input<T>> _inputs;
   
   public:
-    AvgProcess(std::initializer_list<BasicInput<T>> inputs)
+    AvgProcess(std::initializer_list<Input<T>> inputs)
     : _inputs(inputs) { }
 
-    AvgProcess(std::vector<BasicInput<T>> inputs)
+    AvgProcess(std::vector<Input<T>> inputs)
     : _inputs(inputs) { }
 
     T read() {
@@ -205,7 +205,7 @@ class AvgProcess : public ReduceProcess<T> {
 template <typename T>
 class MinProcess : public ReduceProcess<T>  {
   public:
-    MinProcess(std::initializer_list<BasicInput<T>> inputs)
+    MinProcess(std::initializer_list<Input<T>> inputs)
     : ReduceProcess<T>(inputs, [](T acc, T value) { return min(acc, value); })
     { }
 };
@@ -213,19 +213,19 @@ class MinProcess : public ReduceProcess<T>  {
 template <typename T>
 class MaxProcess : public ReduceProcess<T>  {
   public:
-    MaxProcess(std::initializer_list<BasicInput<T>> inputs)
+    MaxProcess(std::initializer_list<Input<T>> inputs)
     : ReduceProcess<T>(inputs, [](T acc, T value) { return max(acc, value); })
     { }
 };
 
 template <typename TInputKey, typename TVal>
-class InputSwitcher : public BasicInput<std::optional<TVal>> {
+class InputSwitcher : public Input<std::optional<TVal>> {
   private:
-    std::map<TInputKey, BasicInput<TVal>> _inputs;
-    BasicInput<TInputKey> _switchInput;
+    std::map<TInputKey, Input<TVal>> _inputs;
+    Input<TInputKey> _switchInput;
   
   public:
-    InputSwitcher(std::map<TInputKey, BasicInput<TVal>> inputs, BasicInput<TInputKey> switchInput)
+    InputSwitcher(std::map<TInputKey, Input<TVal>> inputs, Input<TInputKey> switchInput)
     : _inputs(inputs), _switchInput(switchInput)
     { }
 
@@ -243,7 +243,7 @@ class InputSwitcher : public BasicInput<std::optional<TVal>> {
 template <typename T>
 class NotEmptyFilterProcess : public MapProcess<std::optional<T>, T> {
   public:
-    NotEmptyFilterProcess(std::vector<BasicInput<std::optional<T>>> inputs)
+    NotEmptyFilterProcess(std::vector<Input<std::optional<T>>> inputs)
     : MapProcess<std::optional<T>, T>(
       FilterProcess<std::optional<T>>(
         inputs,

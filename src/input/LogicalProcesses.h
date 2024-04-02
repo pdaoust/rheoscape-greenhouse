@@ -6,13 +6,13 @@
 // Boolean processes.
 // These all cast empty values to false for the purpose of comparison.
 
-class AndProcess : public BasicInput<bool> {
+class AndProcess : public Input<bool> {
   private:
-    BasicInput<bool> _wrappedInputA;
-    BasicInput<bool> _wrappedInputB;
+    Input<bool> _wrappedInputA;
+    Input<bool> _wrappedInputB;
   
   public:
-    AndProcess(BasicInput<bool> wrappedInputA, BasicInput<bool> wrappedInputB)
+    AndProcess(Input<bool> wrappedInputA, Input<bool> wrappedInputB)
     :
       _wrappedInputA(wrappedInputA),
       _wrappedInputB(wrappedInputB)
@@ -23,13 +23,13 @@ class AndProcess : public BasicInput<bool> {
     }
 };
 
-class OrProcess : public BasicInput<bool> {
+class OrProcess : public Input<bool> {
   private:
-    BasicInput<bool> _wrappedInputA;
-    BasicInput<bool> _wrappedInputB;
+    Input<bool> _wrappedInputA;
+    Input<bool> _wrappedInputB;
   
   public:
-    OrProcess(BasicInput<bool> wrappedInputA, BasicInput<bool> wrappedInputB)
+    OrProcess(Input<bool> wrappedInputA, Input<bool> wrappedInputB)
     :
       _wrappedInputA(wrappedInputA),
       _wrappedInputB(wrappedInputB)
@@ -40,13 +40,13 @@ class OrProcess : public BasicInput<bool> {
     }
 };
 
-class XorProcess : public BasicInput<bool> {
+class XorProcess : public Input<bool> {
   private:
-    BasicInput<bool> _wrappedInputA;
-    BasicInput<bool> _wrappedInputB;
+    Input<bool> _wrappedInputA;
+    Input<bool> _wrappedInputB;
   
   public:
-    XorProcess(BasicInput<bool> wrappedInputA, BasicInput<bool> wrappedInputB)
+    XorProcess(Input<bool> wrappedInputA, Input<bool> wrappedInputB)
     :
       _wrappedInputA(wrappedInputA),
       _wrappedInputB(wrappedInputB)
@@ -58,12 +58,12 @@ class XorProcess : public BasicInput<bool> {
     }
 };
 
-class NotProcess : public BasicInput<bool> {
+class NotProcess : public Input<bool> {
   private:
-    BasicInput<bool> _wrappedInput;
+    Input<bool> _wrappedInput;
   
   public:
-    NotProcess(BasicInput<bool> wrappedInput) : _wrappedInput(wrappedInput) { }
+    NotProcess(Input<bool> wrappedInput) : _wrappedInput(wrappedInput) { }
 
     bool read() {
       return !_wrappedInput.read();
