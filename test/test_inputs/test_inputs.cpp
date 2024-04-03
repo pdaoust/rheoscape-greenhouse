@@ -47,6 +47,17 @@ void test_multi_input() {
   TEST_ASSERT_EQUAL(9, input.readChannel(2));
 }
 
+void test_input_of_inputs() {
+  std::vector<Input<int>*> inputs = {
+    new ConstantInput(3),
+    new ConstantInput(6),
+    new ConstantInput(9)
+  };
+  InputOfInputs<int> inputOfInputs(&inputs);
+  TEST_ASSERT_EQUAL(3, inputOfInputs.read().size());
+  TEST_ASSERT_EQUAL(3, inputOfInputs.read()[0]);
+}
+
 int main(int argc, char **argv) {
   UNITY_BEGIN();
   RUN_TEST(test_function_input);
@@ -55,5 +66,6 @@ int main(int argc, char **argv) {
   RUN_TEST(test_make_range_constant_input);
   RUN_TEST(test_pointer_input);
   RUN_TEST(test_multi_input);
+  RUN_TEST(test_input_of_inputs);
   UNITY_END();
 }
