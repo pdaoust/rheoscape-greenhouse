@@ -11,15 +11,12 @@
 
 template <typename T>
 class Input {
-  private:
-    static T default_t;
-
   public:
-    virtual T read() { return default_t; }
+    virtual T read() = 0;
 };
 
 template <typename T>
-class FunctionInput : Input<T> {
+class FunctionInput : public Input<T> {
   private:
     std::function<T()> _computeValue;
   
@@ -32,11 +29,8 @@ class FunctionInput : Input<T> {
 
 template <typename TChan, typename TVal>
 class MultiInput {
-  private:
-    static TVal default_t;
-
   public:
-    virtual TVal readChannel(TChan channel) { return default_t; };
+    virtual TVal readChannel(TChan channel) = 0;
 
     Input<TVal> getInputForChannel(TChan channel);
 };
@@ -54,7 +48,7 @@ class SingleChannelOfMultiInput : public Input<TVal> {
         _channel(channel)
       { }
 
-    TVal read() {
+    virtual TVal read() {
       return _wrappedInput.readChannel(_channel);
     }
 };
@@ -73,14 +67,14 @@ class ConstantInput : public Input<T> {
   public:
     ConstantInput(T value) : _value(value) { }
 
-    T read() {
+    virtual T read() {
       return _value;
     }
 };
 
 // Special case that gets used a lot.
 template <typename T>
-Input<Range<T>> makeRangeConstantInput(T min, T max) {
+ConstantInput<Range<T>> makeRangeConstantInput(T min, T max) {
   return ConstantInput<Range<T>>(Range<T>{ min, max });
 }
 
@@ -93,8 +87,8 @@ class PointerInput : public Input<T> {
   public:
     PointerInput(T* pointer) : _pointer(pointer) { }
 
-    std::optional<T> read() {
-      return &_pointer;
+    virtual T read() {
+      return *_pointer;
     }
 };
 
@@ -105,12 +99,32 @@ class StateInput : public Input<T> {
     T _value;
 
   public:
-    T read() {
+    StateInput(T initialValue)
+    : _value(initialValue)
+    { }
+
+    virtual T read() {
       return _value;
     }
 
     void write(T value) {
       _value = value;
+    }
+};
+
+template <typename TChan, typename TVal>
+class MapMultiInput : public MultiInput<TChan, TVal> {
+  private:
+    std::map<TChan, Input<TVal>*> _inputs;
+  
+  public:
+    MapMultiInput(std::map<TChan, Input<TVal>*> inputs)
+    : _inputs(inputs)
+    { }
+
+    virtual TVal readChannel(TChan channel) {
+      Input<TVal>* input = _inputs[channel];
+      return input->read();
     }
 };
 
