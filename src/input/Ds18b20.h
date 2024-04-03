@@ -1,6 +1,8 @@
 #ifndef RHEOSCAPE_DS18B20_H
 #define RHEOSCAPE_DS18B20_H
 
+#ifdef PLATFORM_ARDUINO
+
 #include <Arduino.h>
 #include <input/Input.h>
 #include <OneWire.h>
@@ -97,5 +99,7 @@ class Ds18b20 : public MultiInput<uint64_t, std::optional<float>> {
       return _deviceTemperatures.at(address);
     }
 };
+
+#endif
 
 #endif

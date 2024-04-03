@@ -1,6 +1,8 @@
 #ifndef RHEOSCAPE_BH1750_H
 #define RHEOSCAPE_BH1750_H
 
+#ifdef PLATFORM_ARDUINO
+
 #include <Arduino.h>
 #include <input/Input.h>
 #include <Wire.h>
@@ -36,5 +38,7 @@ class Bh1750 : public Input<std::optional<float>> {
       return _lastReadValue;
     }
 };
+
+#endif
 
 #endif

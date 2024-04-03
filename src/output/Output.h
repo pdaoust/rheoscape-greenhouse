@@ -1,9 +1,6 @@
 #ifndef RHEOSCAPE_OUTPUT_H
 #define RHEOSCAPE_OUTPUT_H
 
-#include <Arduino.h>
-#include <twilio.hpp>
-
 #include <input/Input.h>
 #include <Range.h>
 #include <Runnable.h>

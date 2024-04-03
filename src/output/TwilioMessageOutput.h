@@ -3,6 +3,7 @@
 
 #include <input/Input.h>
 #include <output/Output.h>
+#include <twilio.hpp>
 
 struct TwilioConfig {
   std::string accountId;

@@ -1,6 +1,8 @@
 #ifndef RHEOSCAPE_OUTPUT_FACTORIES_H
 #define RHEOSCAPE_OUTPUT_FACTORIES_H
 
+#ifdef PLATFORM_ARDUINO
+
 #include <input/Input.h>
 #include <input/TimeProcesses.h>
 #include <input/TranslatingProcesses.h>
@@ -63,5 +65,7 @@ Output makeCover(
     runner
   );
 }
+
+#endif
 
 #endif

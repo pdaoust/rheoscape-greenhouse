@@ -1,6 +1,8 @@
 #ifndef RHEOSCAPE_ANALOG_PIN_OUTPUT_H
 #define RHEOSCAPE_ANALOG_PIN_OUTPUT_H
 
+#ifdef PLATFORM_ARDUINO
+
 #include <output/Output.h>
 
 class AnalogPinOutput : public Output {
@@ -25,5 +27,7 @@ class AnalogPinOutput : public Output {
       }
     }
 };
+
+#endif
 
 #endif

@@ -1,6 +1,8 @@
 #ifndef RHEOSCAPE_MOTOR_DRIVER_H
 #define RHEOSCAPE_MOTOR_DRIVER_H
 
+#ifdef PLATFORM_ARDUINO
+
 #include <input/Input.h>
 #include <output/Output.h>
 
@@ -53,5 +55,7 @@ class MotorDriver : public Output {
       }
     }
 };
+
+#endif
 
 #endif

@@ -1,6 +1,8 @@
 #ifndef RHEOSCAPE_SHT21_H
 #define RHEOSCAPE_SHT21_H
 
+#ifdef PLATFORM_ARDUINO
+
 #include <Arduino.h>
 #include <input/Input.h>
 #include <SHT2x.h>
@@ -81,5 +83,7 @@ class Sht21 : public MultiInput<Sht21Channel, std::optional<float>> {
       }
     }
 };
+
+#endif
 
 #endif

@@ -1,6 +1,8 @@
 #ifndef RHEOSCAPE_DIGITAL_PIN_OUTPUT_H
 #define RHEOSCAPE_DIGITAL_PIN_OUTPUT_H
 
+#ifdef PLATFORM_ARDUINO
+
 #include <input/Input.h>
 #include <output/Output.h>
 
@@ -26,5 +28,7 @@ class DigitalPinOutput : public Output {
       digitalWrite(_pin, _input.read() ? _onState : !_onState);
     }
 };
+
+#endif
 
 #endif

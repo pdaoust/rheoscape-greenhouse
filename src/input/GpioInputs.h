@@ -1,6 +1,8 @@
 #ifndef RHEOSCAPE_GPIO_INPUTS_H
 #define RHEOSCAPE_GPIO_INPUTS_H
 
+#ifdef PLATFORM_ARDUINO
+
 #include <Arduino.h>
 #include <input/Input.h>
 
@@ -50,5 +52,7 @@ class AnalogPinInput : public Input<float> {
       analogReadResolution(resolution);
     }
 };
+
+#endif
 
 #endif

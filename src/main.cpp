@@ -1,6 +1,7 @@
 #include <optional>
 #include <sstream>
 
+#ifdef PLATFORM_ARDUINO
 #include <Arduino.h>
 
 #include <display/BitmapProcesses.h>
@@ -253,3 +254,11 @@ void setup() {
 
 void loop() {
 }
+
+#else
+
+int main() {
+  return 0;
+}
+
+#endif

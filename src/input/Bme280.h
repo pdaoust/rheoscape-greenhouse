@@ -1,6 +1,8 @@
 #ifndef RHEOSCAPE_BME280_H
 #define RHEOSCAPE_BME280_H
 
+#ifdef PLATFORM_ARDUINO
+
 #include <Arduino.h>
 #include <input/Input.h>
 #include <BME280_DEV.h>
@@ -58,5 +60,7 @@ class Bme280 : public MultiInput<Bme280Channel, std::optional<float>> {
       }
     }
 };
+
+#endif
 
 #endif
