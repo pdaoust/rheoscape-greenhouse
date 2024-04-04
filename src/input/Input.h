@@ -128,23 +128,4 @@ class MapMultiInput : public MultiInput<TChan, TVal> {
     }
 };
 
-template <typename T>
-class InputOfInputs : Input<std::vector<T>> {
-  private:
-    std::vector<Input<T>*>* _inputs;
-  
-  public:
-    InputOfInputs(std::vector<Input<T>*>* inputs)
-    : _inputs(inputs)
-    { }
-
-    virtual std::vector<T> read() {
-      std::vector<T> values;
-      for (uint i = 0; i < _inputs->size(); i ++) {
-        values.push_back(_inputs->at(i)->read());
-      }
-      return values;
-    }
-};
-
 #endif

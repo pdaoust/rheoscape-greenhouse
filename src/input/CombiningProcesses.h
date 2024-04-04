@@ -7,6 +7,26 @@
 #include <input/Input.h>
 #include <Range.h>
 
+// Convert a vector of inputs to an input of a vector.
+template <typename T>
+class InputOfInputs : public Input<std::vector<T>> {
+  private:
+    std::vector<Input<T>*>* _inputs;
+  
+  public:
+    InputOfInputs(std::vector<Input<T>*>* inputs)
+    : _inputs(inputs)
+    { }
+
+    virtual std::vector<T> read() {
+      std::vector<T> values;
+      for (uint i = 0; i < _inputs->size(); i ++) {
+        values.push_back(_inputs->at(i)->read());
+      }
+      return values;
+    }
+};
+
 // Merges two inputs of the same type into one range input.
 template <typename T>
 class MergingRangeProcess : public Input<Range<T>> {
@@ -92,26 +112,35 @@ class Merging3Process : public Input<std::tuple<T1, T2, T3>> {
 template <typename TIn, typename TOut>
 class FoldProcess : public Input<TOut> {
   private:
-    std::vector<Input<TIn>*>* _inputs;
+    Input<std::vector<TIn>>* _inputs;
     std::function<TOut(TOut, TIn)> _foldFunction;
     Input<TOut>* _initialValueInput;
 
   public:
-    FoldProcess(std::vector<Input<TIn>*>* inputs, std::function<TOut(TOut, TIn)> foldFunction, Input<TOut>* initialValueInput)
+    FoldProcess(Input<std::vector<TIn>>* inputs, std::function<TOut(TOut, TIn)> foldFunction, Input<TOut>* initialValueInput)
     :
       _inputs(inputs),
       _foldFunction(foldFunction),
       _initialValueInput(initialValueInput)
     { }
 
-    FoldProcess(std::vector<Input<TIn>*>* inputs, std::function<TOut(TOut, TIn)> foldFunction, TOut initialValue)
+    FoldProcess(Input<std::vector<TIn>>* inputs, std::function<TOut(TOut, TIn)> foldFunction, TOut initialValue)
     : FoldProcess(inputs, foldFunction, new ConstantInput<TOut>(initialValue))
+    { }
+
+    FoldProcess(std::vector<Input<TIn>*>* inputs, std::function<TOut(TOut, TIn)> foldFunction, Input<TOut>* initialValueInput)
+    : FoldProcess(new InputOfInputs<TIn>(inputs), foldFunction, initialValueInput)
+    { }
+
+    FoldProcess(std::vector<Input<TIn>*>* inputs, std::function<TOut(TOut, TIn)> foldFunction, TOut initialValue)
+    : FoldProcess(new InputOfInputs<TIn>(inputs), foldFunction, new ConstantInput<TOut>(initialValue))
     { }
 
     virtual TOut read() {
       TOut acc = _initialValueInput->read();
-      for (uint i = 0; i < _inputs->size(); i ++) {
-        acc = _foldFunction(acc, _inputs->at(i)->read());
+      std::vector<TIn> inValues = _inputs->read();
+      for (uint i = 0; i < inValues.size(); i ++) {
+        acc = _foldFunction(acc, inValues[i]);
       }
       return acc;
     }
