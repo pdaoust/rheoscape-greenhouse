@@ -1,6 +1,7 @@
 #ifndef RHEOSCAPE_FANCY_PUSHBUTTON_H
 #define RHEOSCAPE_FANCY_PUSHBUTTON_H
 
+#include <Timer.h>
 #include <input/GpioInputs.h>
 #include <event_stream/EventStream.h>
 #include <event_stream/EventStreamProcesses.h>
@@ -68,7 +69,6 @@ class FancyPushbutton : public EventStream<FancyPushbuttonEvent>, public Runnabl
   public:
     FancyPushbutton(
       EventStream<bool> wrappedEventStream,
-      Runner runner,
       // If a press is as long as this or shorter, it'll be considered a short press.
       uint16_t shortPressTime = 200,
       // If a press is longer than a short press, but as long as this or shorter, it'll be considered a long press.
@@ -76,7 +76,7 @@ class FancyPushbutton : public EventStream<FancyPushbuttonEvent>, public Runnabl
       // Any press longer than a long press will emit press events at this interval.
       uint16_t repeatInterval = 200
     ) :
-      Runnable(runner),
+      Runnable(),
       _shortPressTime(shortPressTime),
       _longPressTime(longPressTime),
       _repeatInterval(repeatInterval)
@@ -88,7 +88,7 @@ class FancyPushbutton : public EventStream<FancyPushbuttonEvent>, public Runnabl
       if (event.value && (!_lastEventReceived.has_value() || !_lastEventReceived.value().value)) {
         // Last event seen was false and the new one is true; transition to down.
         _lastEventEmitted = Event<FancyPushbuttonEvent>{
-          millis(),
+          Timekeeper::nowMillis(),
           button_down
         };
         _emit(_lastEventEmitted.value());
@@ -101,7 +101,7 @@ class FancyPushbutton : public EventStream<FancyPushbuttonEvent>, public Runnabl
         // If the last event received was true, we know that something has already been emitted;
         // therefore, skip the `has_value()` check.
         FancyPushbuttonEvent lastPushbuttonEventEmitted = _lastEventEmitted.value().value;
-        unsigned long now = millis();
+        unsigned long now = Timekeeper::nowMillis();
         switch (lastPushbuttonEventEmitted) {
           case button_down:
             _emit(Event<FancyPushbuttonEvent>{now, button_press});
@@ -132,7 +132,7 @@ class FancyPushbutton : public EventStream<FancyPushbuttonEvent>, public Runnabl
 
       unsigned long lastEventTimestamp = _lastEventEmitted.value().timestamp;
       FancyPushbuttonEvent lastEvent = _lastEventEmitted.value().value;
-      unsigned long now = millis();
+      unsigned long now = Timekeeper::nowMillis();
       std::optional<unsigned long> lastRepeatPressTimestamp;
       switch (lastEvent) {
         case button_down:
@@ -189,21 +189,22 @@ class FancyPushbutton : public EventStream<FancyPushbuttonEvent>, public Runnabl
     }
 };
 
-FancyPushbutton makeFancyPushbutton(uint8_t inputPin, uint8_t pinMode, unsigned long debounceTime, Runner runner, unsigned long shortPressTime = 200, unsigned long longPressTime = 400, unsigned long repeatInterval = 200) {
+#ifdef PLATFORM_ARDUINO
+
+FancyPushbutton makeFancyPushbutton(uint8_t inputPin, uint8_t pinMode, unsigned long debounceTime, unsigned long shortPressTime = 200, unsigned long longPressTime = 400, unsigned long repeatInterval = 200) {
   return FancyPushbutton(
     EventStreamDebouncer(
       InputToEventStream(
-        DigitalPinInput(inputPin, pinMode),
-        runner
+        DigitalPinInput(inputPin, pinMode)
       ),
-      debounceTime,
-      runner
+      debounceTime
     ),
-    runner,
     shortPressTime,
     longPressTime,
     repeatInterval
   );
 }
+
+#endif
 
 #endif

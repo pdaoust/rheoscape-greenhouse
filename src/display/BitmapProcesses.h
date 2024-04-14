@@ -61,11 +61,11 @@ class BitmapBoxingProcess : public Input<Bitmap16> {
 };
 
 template <typename TDisplayBitmap>
-class BitmapPositioningProcess : public TranslatingNotEmptyProcess<std::tuple<TDisplayBitmap, Coords>, PositionedBitmap<TDisplayBitmap>> {
+class BitmapPositioningProcess : public TranslatingOptionalProcess<std::tuple<TDisplayBitmap, Coords>, PositionedBitmap<TDisplayBitmap>> {
   public:
     BitmapPositioningProcess(Input<TDisplayBitmap> bitmapInput, Input<Coords> positionInput)
     :
-      TranslatingNotEmptyProcess<std::tuple<TDisplayBitmap, Coords>, PositionedBitmap<TDisplayBitmap>>(
+      TranslatingOptionalProcess<std::tuple<TDisplayBitmap, Coords>, PositionedBitmap<TDisplayBitmap>>(
         Merging2NotEmptyProcess<TDisplayBitmap, Coords>(bitmapInput, positionInput),
         [](std::tuple<TDisplayBitmap, Coords> value) {
           return PositionedBitmap<TDisplayBitmap>{
@@ -80,7 +80,7 @@ class BitmapPositioningProcess : public TranslatingNotEmptyProcess<std::tuple<TD
     :
       BitmapPositioningProcess(
         bitmapInput,
-        TranslatingNotEmptyProcess(
+        TranslatingOptionalProcess(
           Merging2NotEmptyProcess<int16_t, int16_t>(xInput, yInput),
           [](std::tuple<int16_t, int16_t> value) {
             return Coords{std::get<0>(value), std::get<1>(value)};

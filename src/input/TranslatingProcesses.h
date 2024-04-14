@@ -1,31 +1,42 @@
 #ifndef RHEOSCAPE_TRANSLATING_PROCESSES_H
 #define RHEOSCAPE_TRANSLATING_PROCESSES_H
 
+#include <functional>
+
 #include <input/Input.h>
 
 template <typename TIn, typename TOut>
 class TranslatingProcess : public Input<TOut> {
   private:
-    Input<TIn> _wrappedInput;
-    const std::function<TOut(TIn)>& _translator;
+    Input<TIn>* _wrappedInput;
+    std::function<TOut(TIn)> _translator;
 
   public:
-    TranslatingProcess(Input<TIn> wrappedInput, const std::function<TOut(TIn)>& translator)
+    TranslatingProcess(Input<TIn>* wrappedInput, std::function<TOut(TIn)> translator)
     :
       _wrappedInput(wrappedInput),
       _translator(translator)
     { }
 
-    TOut read() {
-      return _translator(_wrappedInput.read());
+    virtual TOut read() {
+      return _translator(_wrappedInput->read());
     }
 };
 
 template <typename TIn, typename TOut>
-class TranslatingNotEmptyProcess : public TranslatingProcess<std::optional<TIn>, TOut> {
+class TranslatingOptionalProcess : public TranslatingProcess<std::optional<TIn>, std::optional<TOut>> {
   public:
-    TranslatingNotEmptyProcess(Input<std::optional<TIn>> wrappedInput, const std::function<TOut(std::optional<TIn>)>& translator)
-    : TranslatingProcess<TIn, TOut>(wrappedInput, [translator](std::optional<TIn> value) { return value.has_value() ? translator(value.value()) : value; })
+    TranslatingOptionalProcess(
+      Input<std::optional<TIn>>* wrappedInput,
+      std::function<TOut(TIn)> translator
+    )
+    : TranslatingProcess<std::optional<TIn>, std::optional<TOut>>(
+        wrappedInput,
+        [translator](std::optional<TIn> value) {
+          return value.has_value()
+            ? (std::optional<TOut>)translator(value.value())
+            : std::nullopt;
+        })
     { }
 };
 

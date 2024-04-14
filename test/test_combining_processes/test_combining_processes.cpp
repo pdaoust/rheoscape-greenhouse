@@ -4,6 +4,28 @@
 #include <unity.h>
 #include <input/CombiningProcesses.h>
 
+void test_input_of_inputs() {
+  std::vector<Input<int>*> inputs = {
+    new ConstantInput(3),
+    new ConstantInput(6),
+    new ConstantInput(9)
+  };
+  InputOfInputs<int> inputOfInputs(&inputs);
+  TEST_ASSERT_EQUAL(3, inputOfInputs.read().size());
+  TEST_ASSERT_EQUAL(3, inputOfInputs.read()[0]);
+}
+
+void test_input_of_mapped_inputs() {
+  std::map<int, Input<int>*> inputs = {
+    { 0, new ConstantInput(3) },
+    { 1, new ConstantInput(6) },
+    { 2, new ConstantInput(9) }
+  };
+  InputOfMappedInputs<int, int> inputOfInputs(&inputs);
+  TEST_ASSERT_EQUAL(3, inputOfInputs.read().size());
+  TEST_ASSERT_EQUAL(3, inputOfInputs.read()[0]);
+}
+
 void test_merging_range_process() {
   StateInput min(3);
   StateInput max(5);
@@ -174,6 +196,8 @@ void test_not_empty_process() {
 
 int main(int argc, char **argv) {
   UNITY_BEGIN();
+  RUN_TEST(test_input_of_inputs);
+  RUN_TEST(test_input_of_mapped_inputs);
   RUN_TEST(test_merging_range_process);
   RUN_TEST(test_merging_2_process);
   RUN_TEST(test_merging_2_not_empty_process);

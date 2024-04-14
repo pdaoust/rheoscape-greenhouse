@@ -27,6 +27,25 @@ class InputOfInputs : public Input<std::vector<T>> {
     }
 };
 
+template <typename TKey, typename TVal>
+class InputOfMappedInputs : public Input<std::map<TKey, TVal>> {
+  private:
+    std::map<TKey, Input<TVal>*>* _inputs;
+  
+  public:
+    InputOfMappedInputs(std::map<TKey, Input<TVal>*>* inputs)
+    : _inputs(inputs)
+    { }
+
+    virtual std::map<TKey, TVal> read() {
+      std::map<TKey, TVal> values;
+      for (std::pair<TKey, Input<TVal>*> const kvp : *_inputs) {
+        values[kvp.first] = kvp.second->read();
+      }
+      return values;
+    }
+};
+
 // Merges two inputs of the same type into one range input.
 template <typename T>
 class MergingRangeProcess : public Input<Range<T>> {
@@ -149,23 +168,28 @@ class FoldProcess : public Input<TOut> {
 template <typename T>
 class ReduceProcess : public Input<T> {
   private:
-    std::vector<Input<T>*>* _inputs;
+    Input<std::vector<T>>* _inputs;
     std::function<T(T, T)> _reduceFunction;
 
   public:
     ReduceProcess(std::vector<Input<T>*>* inputs, std::function<T(T, T)> reduceFunction)
-    : 
+    : ReduceProcess(new InputOfInputs(inputs), reduceFunction)
+    { }
+
+    ReduceProcess(Input<std::vector<T>>* inputs, std::function<T(T, T)> reduceFunction)
+    :
       _inputs(inputs),
       _reduceFunction(reduceFunction)
     { }
 
     virtual T read() {
-      if (_inputs->size() < 1) {
+      std::vector<T> values = _inputs->read();
+      if (values.size() < 1) {
         throw std::invalid_argument("Can't reduce an empty vector");
       }
-      T acc = _inputs->at(0)->read();
-      for (uint i = 1; i < _inputs->size(); i ++) {
-        acc = _reduceFunction(acc, _inputs->at(i)->read());
+      T acc = values.at(0);
+      for (uint i = 1; i < values.size(); i ++) {
+        acc = _reduceFunction(acc, values.at(i));
       }
       return acc;
     }
@@ -174,99 +198,124 @@ class ReduceProcess : public Input<T> {
 template <typename TIn, typename TOut>
 class MapProcess : public Input<std::vector<TOut>> {
   private:
-    std::vector<Input<TIn>*>* _inputs;
+    Input<std::vector<TIn>>* _inputs;
     std::function<TOut(TIn)> _mapFunction;
 
   public:
-    MapProcess(std::vector<Input<TIn>*>* inputs, std::function<TOut(TIn)> mapFunction)
+    MapProcess(Input<std::vector<TIn>>* inputs, std::function<TOut(TIn)> mapFunction)
     :
       _inputs(inputs),
       _mapFunction(mapFunction)
     { }
 
+    MapProcess(std::vector<Input<TIn>*>* inputs, std::function<TOut(TIn)> mapFunction)
+    : MapProcess(new InputOfInputs(inputs), mapFunction)
+    { }
+
     virtual std::vector<TOut> read() {
-      std::vector<TOut> values;
-      for (uint i = 0; i < _inputs->size(); i ++) {
-        values.push_back(_mapFunction(_inputs->at(i)->read()));
+      std::vector<TIn> values = _inputs->read();
+      std::vector<TOut> mappedValues;
+      for (uint i = 0; i < values.size(); i ++) {
+        mappedValues.push_back(_mapFunction(values.at(i)));
       }
-      return values;
+      return mappedValues;
     }
 };
 
 template <typename T>
 class FilterProcess : public Input<std::vector<T>> {
   private:
-    std::vector<Input<T>*>* _inputs;
+    Input<std::vector<T>>* _inputs;
     std::function<bool(T)> _filterFunction;
   
   public:
-    FilterProcess(std::vector<Input<T>*>* inputs, std::function<bool(T)> filterFunction)
+    FilterProcess(Input<std::vector<T>>* inputs, std::function<bool(T)> filterFunction)
     :
       _inputs(inputs),
       _filterFunction(filterFunction)
     { }
 
+    FilterProcess(std::vector<Input<T>*>* inputs, std::function<bool(T)> filterFunction)
+    : FilterProcess(new InputOfInputs(inputs), filterFunction)
+    { }
+
     virtual std::vector<T> read() {
-      std::vector<T> values;
-      for (uint i = 0; i < _inputs->size(); i ++) {
-        T value = _inputs->at(i)->read();
+      std::vector<T> values = _inputs->read();
+      std::vector<T> filteredValues;
+      for (uint i = 0; i < values.size(); i ++) {
+        T value = values.at(i);
         if (_filterFunction(value)) {
-          values.push_back(value);
+          filteredValues.push_back(value);
         }
       }
-      return values;
+      return filteredValues;
     }
 };
 
 template <typename T>
 class AvgProcess : public Input<T> {
   private:
-    std::vector<Input<T>*>* _inputs;
+    Input<std::vector<T>>* _inputs;
   
   public:
+    AvgProcess(Input<std::vector<T>>* inputs)
+    : _inputs(inputs)
+    { }
+
+    AvgProcess(std::vector<Input<T>*>* inputs)
+    : AvgProcess(new InputOfInputs(inputs))
+    { }
+
     AvgProcess(std::initializer_list<Input<T>*>* inputs)
     : AvgProcess((std::vector<Input<T>*>*) inputs)
     { }
 
-    AvgProcess(std::vector<Input<T>*>* inputs)
-    : _inputs(inputs) { }
-
     virtual T read() {
       T acc = 0;
-      for (uint i = 0; i < _inputs->size(); i ++) {
-        acc += _inputs->at(i)->read();
+      std::vector<T> values = _inputs->read();
+      for (uint i = 0; i < values.size(); i ++) {
+        acc += values.at(i);
       }
-      return acc / _inputs->size();
+      return acc / values.size();
     }
 };
 
 template <typename T>
 class MinProcess : public ReduceProcess<T>  {
   public:
-    MinProcess(std::initializer_list<Input<T>*>* inputs)
-    : MinProcess((std::vector<Input<T>*>*)inputs)
+    MinProcess(Input<std::vector<T>>* inputs)
+    : ReduceProcess<T>(inputs, [](T acc, T value) { return std::min(acc, value); })
     { }
 
     MinProcess(std::vector<Input<T>*>* inputs)
-    : ReduceProcess<T>(inputs, [](T acc, T value) { return std::min(acc, value); })
+    : MinProcess(new InputOfInputs(inputs))
+    { }
+
+    MinProcess(std::initializer_list<Input<T>*>* inputs)
+    : MinProcess((std::vector<Input<T>*>*)inputs)
     { }
 };
 
 template <typename T>
 class MaxProcess : public ReduceProcess<T>  {
   public:
-    MaxProcess(std::initializer_list<Input<T>*>* inputs)
-    : MaxProcess((std::vector<Input<T>*>*)inputs)
+    MaxProcess(Input<std::vector<T>>* inputs)
+    : ReduceProcess<T>(inputs, [](T acc, T value) { return std::max(acc, value); })
+    { }
+    
+    MaxProcess(std::vector<Input<T>*>* inputs)
+    : MaxProcess(new InputOfInputs(inputs))
     { }
 
-    MaxProcess(std::vector<Input<T>*>* inputs)
-    : ReduceProcess<T>(inputs, [](T acc, T value) { return std::max(acc, value); })
+    MaxProcess(std::initializer_list<Input<T>*>* inputs)
+    : MaxProcess((std::vector<Input<T>*>*)inputs)
     { }
 };
 
 template <typename TInputKey, typename TVal>
 class InputSwitcher : public Input<TVal> {
   private:
+    // I'm not sure if it makes sense to store a map of inputs or an input of a map of values.
     std::map<TInputKey, Input<TVal>*>* _inputs;
     Input<TInputKey>* _switchInput;
   

@@ -1,12 +1,9 @@
 #ifndef RHEOSCAPE_EVENT_STREAM_H
 #define RHEOSCAPE_EVENT_STREAM_H
 
-#include <optional>
-#include <queue>
-#include <Arduino.h>
-
-#include <Timer.h>
+#include <helpers/string_format.h>
 #include <Runnable.h>
+#include <Timer.h>
 
 template <typename T>
 struct Event {
@@ -31,7 +28,7 @@ class EventStream {
 
     void _emit(T value) {
       _emit(Event<T>{
-        millis(),
+        Timekeeper::nowMillis(),
         value
       });
     }
@@ -45,5 +42,43 @@ class EventStream {
 // I suppose it's silly to make this; just feel like it makes intentions clear.
 template <typename T>
 class NullEventStream : public EventStream<T> { };
+
+template <typename T>
+class BeaconEventStream : public EventStream<T>, public Runnable {
+  private:
+    Timer _timer;
+  
+  public:
+    BeaconEventStream(Input<T>* input, unsigned long interval)
+    : 
+      Runnable(),
+      _timer(Timer(
+        interval,
+        [input, this]() {
+          this->_emit(input->read());
+        },
+        std::nullopt,
+        true
+      ))
+    { }
+
+    BeaconEventStream(T value, unsigned long interval)
+    : BeaconEventStream(new ConstantInput(value), interval)
+    { }
+
+    virtual void run() {
+      _timer.run();
+    }
+};
+
+template <typename T>
+class DumbEventStream : public EventStream<T> {
+  public:
+    DumbEventStream() {}
+
+    void emit(T value) {
+      this->_emit(value);
+    }
+};
 
 #endif

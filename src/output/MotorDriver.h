@@ -16,7 +16,7 @@ class MotorDriver : public Output {
     Input<float> _input;
 
   public:
-    MotorDriver(uint8_t forwardPin, uint8_t backwardPin, uint8_t pwmPin, bool controlPinActiveState, Input<float> input, Runner runner)
+    MotorDriver(uint8_t forwardPin, uint8_t backwardPin, uint8_t pwmPin, bool controlPinActiveState, Input<float> input)
     : _forwardPin(forwardPin),
       _backwardPin(backwardPin),
       _pwmPin(pwmPin),

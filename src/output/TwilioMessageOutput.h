@@ -47,7 +47,7 @@ class TwilioMessageOutput : public Output {
     }
   
   public:
-    TwilioMessageOutput(Input<std::string> input, unsigned long sendEvery, TwilioConfig config, Runner runner)
+    TwilioMessageOutput(Input<std::string> input, unsigned long sendEvery, TwilioConfig config)
     :
       _input(input),
       _throttle(Throttle(
@@ -58,7 +58,7 @@ class TwilioMessageOutput : public Output {
       )),
       _config(config),
       _client(config.accountId.c_str(), config.authToken.c_str()),
-      Output(runner)
+      Output()
     { }
 
     void run() {

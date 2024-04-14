@@ -11,7 +11,7 @@ class AnalogPinOutput : public Output {
     Input<float> _input;
 
   public:
-    AnalogPinOutput(uint8_t pin, Input<float> input, Runner runner)
+    AnalogPinOutput(uint8_t pin, Input<float> input)
     :
       _pin(pin),
       _input(input),

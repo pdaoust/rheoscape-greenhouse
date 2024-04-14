@@ -19,7 +19,7 @@ class Bh1750 : public Input<std::optional<float>> {
     :
       _lightMeter(BH1750(address)),
       _timer(RepeatTimer(
-        millis(),
+        Timekeeper::nowMillis(),
         sampleInterval,
         [this]() {
           if (_lightMeter.measurementReady()) {

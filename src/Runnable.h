@@ -1,45 +1,27 @@
 #ifndef RHEOSCAPE_RUNNABLE_H
 #define RHEOSCAPE_RUNNABLE_H
 
+#include <functional>
 #include <vector>
-#include <Timer.h>
 
-class AbstractRunnable {
-  public:
-    virtual void run() { }
-};
+#include <helpers/string_format.h>
 
 class Runner {
   private:
-    std::vector<AbstractRunnable*> _runnables;
-    RepeatTimer _timer;
+    inline static std::vector<std::function<void()>> _callbacks;
+    inline static std::string _message;
 
   public:
-    Runner(unsigned long tickInterval = 1)
-    : _timer(RepeatTimer(
-        millis(),
-        tickInterval,
-        [this]() {
-          for (int i = 0; i < _runnables.size(); i ++) {
-            _runnables[i]->run();
-          }
-        }
-      ))
-    { }
-
-    void registerRunnable(AbstractRunnable* runnable) {
-      _runnables.push_back(runnable);
+    static void registerCallback(std::function<void()> callback) {
+      Runner::_callbacks.push_back(callback);
     }
 
-    void run() {
-      _timer.tick();
-    }
-};
-
-class Runnable : public AbstractRunnable {
-  protected:
-    Runnable(Runner runner) {
-      runner.registerRunnable(this);
+    static void run() {
+      Runner::_message = "starting run";
+      for (int i = 0; i < _callbacks.size(); i ++) {
+        Runner::_callbacks[i]();
+      }
+      Runner::_message = "finished run";
     }
 };
 

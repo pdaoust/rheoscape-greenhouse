@@ -14,7 +14,7 @@ class DigitalPinOutput : public Output {
     Input<bool>& _input;
 
   public:
-    DigitalPinOutput(uint8_t pin, bool onState, Input<bool> input, Runner runner)
+    DigitalPinOutput(uint8_t pin, bool onState, Input<bool> input)
     :
       _pin(pin),
       _onState(onState),

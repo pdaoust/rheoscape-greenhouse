@@ -19,8 +19,7 @@ Output makeRelay(
   uint8_t pin,
   bool onState,
   unsigned long minCycleTime,
-  Input<bool> input,
-  Runner runner
+  Input<bool> input
 ) {
   Input<bool> throttle = ThrottlingProcess<bool>(
     input,
@@ -29,8 +28,7 @@ Output makeRelay(
   return DigitalPinOutput(
     pin,
     onState,
-    throttle,
-    runner
+    throttle
   );
 }
 
@@ -43,8 +41,7 @@ Output makeCover(
   uint8_t pwmPin,
   bool controlPinActiveState,
   unsigned long excursionTime,
-  Input<bool> input,
-  Runner runner
+  Input<bool> input
 ) {
   Input<bool> throttle = ThrottlingProcess<bool>(
     input,
@@ -61,8 +58,7 @@ Output makeCover(
     backwardPin,
     pwmPin,
     controlPinActiveState,
-    translator,
-    runner
+    translator
   );
 }
 

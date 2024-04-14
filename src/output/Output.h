@@ -20,7 +20,7 @@
 
 class Output : public Runnable {
   public:
-    Output(Runner runner) : Runnable(runner) { }
+    Output() : Runnable() { }
 };
 
 #endif

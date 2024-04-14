@@ -17,26 +17,26 @@ enum ProcessControlDirection {
 template <typename T>
 class BangBangProcess : public Input<ProcessControlDirection> {
   protected:
-    Input<T> _valueInput;
-    Input<Range<T>> _setpointRangeInput;
+    Input<T>* _valueInput;
+    Input<Range<T>>* _setpointRangeInput;
     ProcessControlDirection _outputDirection;
 
   public:
-    BangBangProcess(Input<T> valueInput, Input<Range<T>> setpointRangeInput)
+    BangBangProcess(Input<T>* valueInput, Input<Range<T>>* setpointRangeInput)
     :
       _valueInput(valueInput),
       _setpointRangeInput(setpointRangeInput)
     { }
 
     ProcessControlDirection read() {
-      T value = _valueInput.read();
-      Range<T> setpointRange = _setpointRangeInput.read();
+      T value = _valueInput->read();
+      Range<T> setpointRange = _setpointRangeInput->read();
       if (value < setpointRange.min) {
         // Tell the output to attempt to increase the process variable if it's too low.
         // If the output controls something that increases the process variable (e.g., heater, sprinkler), turn it on.
         // Otherwise (e.g., cooler), turn it off.
         return up;
-      } else if (value < setpointRange.max) {
+      } else if (value > setpointRange.max) {
         // Naturally, the opposite happens when it goes above the setpoint.
         return down;
       }
@@ -49,7 +49,7 @@ class BangBangProcess : public Input<ProcessControlDirection> {
 // If it was previously up, it keeps it up, and vice versa.
 class DirectionToBooleanProcess : public Input<bool> {
   private:
-    Input<ProcessControlDirection> _wrappedInput;
+    Input<ProcessControlDirection>* _wrappedInput;
     std::optional<ProcessControlDirection> _lastNonNeutralInputValue;
     bool _initialState;
     bool _upIs;
@@ -68,7 +68,7 @@ class DirectionToBooleanProcess : public Input<bool> {
     #pragma GCC diagnostic pop
 
   public:
-    DirectionToBooleanProcess(Input<ProcessControlDirection> wrappedInput, bool upIs, bool initialState = false)
+    DirectionToBooleanProcess(Input<ProcessControlDirection>* wrappedInput, bool upIs, bool initialState = false)
     :
       _wrappedInput(wrappedInput),
       _upIs(upIs),
@@ -78,7 +78,7 @@ class DirectionToBooleanProcess : public Input<bool> {
     #pragma GCC diagnostic push
     #pragma GCC diagnostic ignored "-Wreturn-type"
     bool read() {
-      ProcessControlDirection inputValue = _wrappedInput.read();
+      ProcessControlDirection inputValue = _wrappedInput->read();
       switch (inputValue) {
         case up:
         case down:

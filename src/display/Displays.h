@@ -28,7 +28,7 @@ class AdafruitGfxDisplay : protected BitmapDrawingHelper, public Runnable {
     :
       _driver(driver),
       _input(input),
-      Runnable(runner)
+      Runnable()
     {
       _driver.setRotation(rotation);
     }

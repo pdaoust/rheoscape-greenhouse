@@ -1,99 +1,174 @@
 #ifndef RHEOSCAPE_TIMER_H
 #define RHEOSCAPE_TIMER_H
 
-#include <Arduino.h>
+#include <functional>
+#include <exception>
 
-class Timer {
-  protected:
-    unsigned long _when;
-    const std::function<void()>& _callback;
-    bool _isDone;
+#ifdef PLATFORM_ARDUINO
+#include <Arduino.h>
+#else
+#ifdef PLATFORM_DEV_MACHINE
+#include <chrono>
+#endif
+#endif
+
+#include <Runnable.h>
+
+enum TimekeeperSource {
+  systemTime,
+  simTime
+};
+
+class Timekeeper {
+  private:
+    inline static TimekeeperSource _source = TimekeeperSource::systemTime;
+    inline static unsigned long _nowMillisSim;
   
   public:
-    Timer(unsigned long when, const std::function<void()>& callback)
-    :
-      _when(when),
-      _callback(callback)
-    { }
-
-    void tick() {
-      if (!_when) {
-        return;
+    static unsigned long nowMillis() {
+      switch (Timekeeper::_source) {
+        case TimekeeperSource::systemTime:
+#ifdef PLATFORM_ARDUINO
+          return Timekeeper::nowMillis();
+#else
+#ifdef PLATFORM_DEV_MACHINE
+          return (unsigned long)duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now().time_since_epoch()).count();
+#endif
+#endif
+        case TimekeeperSource::simTime:
+          return Timekeeper::_nowMillisSim;
+        default:
+          throw std::exception();
       }
+    }
 
-      if (millis() >= _when && !_isDone) {
-        _callback();
-        _isDone = true;
+    static void setSource(TimekeeperSource source) {
+      Timekeeper::_source = source;
+      if (source == TimekeeperSource::simTime) {
+        Timekeeper::setNowSim(0);
       }
     }
 
-    bool isRunning() {
-      return _when && !_isDone;
+    static void setNowSim(unsigned long millis) {
+      if (_source != TimekeeperSource::simTime) {
+        std::__throw_invalid_argument("Can't set the time; using system time");
+      }
+      Timekeeper::_nowMillisSim = millis;
     }
 
-    bool isDone() {
-      return _isDone;
-    }
-
-    void restart(unsigned long when) {
-      _when = when;
-      _isDone = false;
-    }
-
-    void cancel() {
-      _when = 0;
+    static void tick(unsigned long millis = 1) {
+      if (_source != TimekeeperSource::simTime) {
+        std::__throw_invalid_argument("Can't tick; using system time");
+      }
+      Timekeeper::_nowMillisSim += millis;
     }
 };
 
-// Call a callback over and over again, and/or up to a certain number of times.
-class RepeatTimer : private Timer {
-  private:
+class Timer : public Runnable {
+  protected:
+    unsigned long _startTime;
+    unsigned long _interval;
+    std::function<void(uint16_t)> _callback;
+    bool _isComplete;
+    bool _isCancelled;
     uint16_t _count;
-    bool _isRunning = false;
+    std::optional<uint16_t> _times;
+    bool _firstRunOnStart;
 
-  public:
-    RepeatTimer(
-      // When to run the first time.
-      unsigned long startAt,
-      // How often to run.
-      // Note that the tick() function should be called more often than this interval,
-      // or it will miss some calls.
-      unsigned long interval,
-      // The function to run.
-      const std::function<void()>& callback,
-      // How many times to run (zero for infinite).
-      uint16_t times = 0
-    ) :
-      Timer(startAt, [this, startAt, interval, times, callback]() {
-        _isRunning = true;
-        if (!times || _count < times) {
-          callback();
-          // This is one of the lines where the count will be off if tick() isn't called often enough.
-          _count ++;
-          if (_count == times) {
-            _isRunning = false;
-            return;
-          }
-          // This is another.
-          Timer::restart(startAt + _count * interval);
-        }
-     })
-    { }
-
-    void tick() { Timer::tick(); }
-
-    bool isRunning() {
-      return Timer::isRunning() && _isRunning;
+    void _start() {
+      _startTime = Timekeeper::nowMillis();
+      _count = 0;
+      _isComplete = false;
+      _isCancelled = false;
+      run();
     }
 
-    bool isDone() { return Timer::isDone(); }
+  public:
+    Timer(unsigned long interval, std::function<void(uint16_t)> callback, std::optional<uint16_t> times = 1, bool firstRunOnStart = false, bool start = true)
+    :
+      Runnable(),
+      _interval(interval),
+      _callback(callback),
+      _times(times),
+      _firstRunOnStart(firstRunOnStart)
+    {
+      if (_interval == 0) {
+        throw std::invalid_argument("Can't have a zero interval. If you want to run the timer immediately, use the firstRunOnStart flag instead.");
+      }
+      if (_firstRunOnStart && _times == 1) {
+        throw std::invalid_argument("Setting firstRunOnStart to true when there's only one interval makes no sense.");
+      }
+      Runner::registerCallback([this]() { this->run(); });
+      if (start) {
+        _start();
+      }
+    }
 
-    void restart(unsigned long when) { Timer::restart(when); }
+    Timer(unsigned long interval, std::function<void()> callback, std::optional<uint16_t> times = 1, bool firstRunOnStart = false, bool start = true)
+    : Timer(interval, [callback](uint16_t _) { callback(); }, times, firstRunOnStart, start)
+    { }
 
-    void cancel() { Timer::cancel(); }
+    virtual void run() {
+      if (_isComplete || _isCancelled) {
+        return;
+      }
 
-    bool getCount() {
+      unsigned long now = Timekeeper::nowMillis();
+      // If the firstRunOnStart flag is set, subtract one interval from the start time.
+      unsigned long elapsed = now - (_startTime + (_count - (_firstRunOnStart ? 1 : 0)) * _interval);
+      if (elapsed < _interval) {
+        return;
+      }
+
+      // It may have been a while since it was last run;
+      // more than one interval may have passed.
+      uint16_t timesToDo = elapsed / _interval;
+      if (_times.has_value()) {
+          // If we're doing it a limited number of times,
+          // and the interval > 1,
+          // don't go beyond the remaining number of times.
+          // This should work -- integer math throws away the remainder.
+        timesToDo = std::min((uint16_t)(_times.value() - _count), timesToDo);
+      }
+
+      // Catch up by running it as many times as we need to.
+      for (uint16_t i = 0; i < timesToDo; i ++) {
+        _callback(_count);
+        _count ++;
+      }
+
+      if (_times.has_value() && _count == _times.value()) {
+        _isComplete = true;
+      }
+    }
+
+    bool isRunning() {
+      run();
+      return !_isComplete && !_isCancelled;
+    }
+
+    bool isComplete() {
+      run();
+      return _isComplete;
+    }
+
+    bool isCancelled() {
+      return _isCancelled;
+    }
+
+    uint16_t getCount() {
+      run();
       return _count;
+    }
+
+    void cancel() {
+      if (!_isComplete) {
+        _isCancelled = true;
+      }
+    }
+
+    void restart() {
+      _start();
     }
 };
 
@@ -101,25 +176,32 @@ class RepeatTimer : private Timer {
 // Not a timer, but timer-related.
 class Throttle {
   private:
-    unsigned long _minDelay;
+    bool _canRun;
     Timer _timer;
-    const std::function<void()>& _callback;
+    std::function<void()> _callback;
 
   public:
-    Throttle(unsigned long minDelay, const std::function<void()>& callback)
+    Throttle(unsigned long minDelay, std::function<void()> callback)
     :
-      _minDelay(minDelay),
-      _timer(Timer(0, [](){})),
+      _canRun(true),
+      _timer(Timer(minDelay, [this](){ _canRun = true; }, 1)),
       _callback(callback)
     { }
 
     bool tryRun() {
-      if (_timer.isRunning()) {
+      _timer.run();
+      if (!_canRun) {
         return false;
       }
       _callback();
-      _timer.restart(_minDelay);
+      _canRun = false;
+      _timer.restart();
       return true;
+    }
+
+    void clear() {
+      _canRun = true;
+      _timer.restart();
     }
 };
 

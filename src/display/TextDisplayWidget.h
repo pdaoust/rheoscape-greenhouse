@@ -83,11 +83,11 @@ std::string formatNumber(T value, uint8_t base, uint8_t precision) {
 };
 
 template <typename T>
-class NumberToStringProcess : public TranslatingNotEmptyProcess<T, std::string> {
+class NumberToStringProcess : public TranslatingOptionalProcess<T, std::string> {
   public:
     NumberToStringProcess(Input<T> wrappedInput, uint8_t base, uint8_t precision)
     :
-      TranslatingNotEmptyProcess<T, std::string>(
+      TranslatingOptionalProcess<T, std::string>(
         wrappedInput,
         [base, precision](T value) {
           return formatNumber<T>(value.value(), base, precision);
@@ -97,7 +97,7 @@ class NumberToStringProcess : public TranslatingNotEmptyProcess<T, std::string> 
 };
 
 template <typename T>
-class NumberToStringProcessWithColours : public TranslatingNotEmptyProcess<T, std::tuple<std::string, Colour>> {
+class NumberToStringProcessWithColours : public TranslatingOptionalProcess<T, std::tuple<std::string, Colour>> {
   private:
     std::map<T, Colour> _initializerListToBreakpointsMap(std::initializer_list<std::tuple<T, Colour>> breakpoints) {
       std::map<T, Colour> breakpointsMap;
@@ -114,7 +114,7 @@ class NumberToStringProcessWithColours : public TranslatingNotEmptyProcess<T, st
       uint8_t precision,
       Colour startColour,
       std::map<T, Colour> breakpoints
-    ) : TranslatingNotEmptyProcess<T, std::tuple<std::string, Colour>>(
+    ) : TranslatingOptionalProcess<T, std::tuple<std::string, Colour>>(
       wrappedInput,
       [base, precision, startColour, breakpoints](T value) {
         Colour colour = startColour;

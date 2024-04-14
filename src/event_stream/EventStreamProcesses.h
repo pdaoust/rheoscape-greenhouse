@@ -1,25 +1,28 @@
 #ifndef RHEOSCAPE_EVENT_STREAM_PROCESSES_H
 #define RHEOSCAPE_EVENT_STREAM_PROCESSES_H
 
+#include <functional>
+
+#include <Runnable.h>
 #include <input/Input.h>
 #include <event_stream/EventStream.h>
 
 template <typename T>
 class InputToEventStream : public EventStream<T>, public Runnable {
   private:
-    Input<T> _wrappedInput;
-    T _lastSeenValue;
+    Input<T>* _wrappedInput;
+    std::optional<T> _lastSeenValue;
   
   public:
-    InputToEventStream(Input<T> wrappedInput, Runner runner)
+    InputToEventStream(Input<T>* wrappedInput)
     :
-      _wrappedInput(wrappedInput),
-      Runnable(runner)
+      Runnable(),
+      _wrappedInput(wrappedInput)
     { }
 
-    void run() {
-      T value = _wrappedInput.read();
-      if (value != _lastSeenValue) {
+    virtual void run() {
+      T value = _wrappedInput->read();
+      if (!_lastSeenValue.has_value() || value != _lastSeenValue.value()) {
         _lastSeenValue = value;
         EventStream<T>::_emit(value);
       }
@@ -29,50 +32,54 @@ class InputToEventStream : public EventStream<T>, public Runnable {
 template <typename T>
 class EventStreamFilter : public EventStream<T> {
   private:
-    const std::function<bool(T)>& _filter;
+    std::function<bool(Event<T>)> _filter;
 
   public:
     void receiveEvent(Event<T> event) {
-      if (_filter(event.value)) {
-        _emit(event);
+      if (_filter(event)) {
+        this->_emit(event);
       }
     }
 
-    EventStreamFilter(EventStream<T> wrappedEventStream, const std::function<bool(T)>& filter)
+    EventStreamFilter(EventStream<T>* wrappedEventStream, std::function<bool(Event<T>)> filter)
     : _filter(filter)
     {
-      wrappedEventStream.registerSubscriber([this](Event<T> v) { this->receiveEvent(v); });
+      wrappedEventStream->registerSubscriber([this](Event<T> e) { this->receiveEvent(e); });
     }
+
+    EventStreamFilter(EventStream<T>* wrappedEventStream, std::function<bool(T)> filter)
+    : EventStreamFilter(wrappedEventStream, [filter](Event<T> e) { return filter(e.value); })
+    { }
 };
 
 template <typename TIn, typename TOut>
 class EventStreamTranslator : public EventStream<TOut> {
   private:
-    const std::function<TOut(TIn)>& _translator;
+    const std::function<Event<TOut>(Event<TIn>)> _translator;
+
+    void _receiveEvent(Event<TIn> event) {
+      this->_emit(_translator(event));
+    }
 
   public:
-    EventStreamTranslator(EventStream<TIn> wrappedEventStream, const std::function<TOut(TIn)>& translator)
+    EventStreamTranslator(EventStream<TIn>* wrappedEventStream, std::function<Event<TOut>(Event<TIn>)> translator)
     : _translator(translator)
     {
-      wrappedEventStream.registerSubscriber([this](Event<TIn> v) { this->receiveEvent(v); });
+      wrappedEventStream->registerSubscriber([this](Event<TIn> e) { this->_receiveEvent(e); });
     }
 
-    void receiveEvent(Event<TIn> event) {
-      TOut translated = _translator(event.value);
-      _emit(Event<TOut>{
-        event.timestamp,
-        translated
-      });
-    }
+    EventStreamTranslator(EventStream<TIn>* wrappedEventStream, std::function<TOut(TIn)> translator)
+    : EventStreamTranslator(wrappedEventStream, [translator](Event<TIn> e) { return Event(e.timestamp, translator(e.value)); })
+    { }
 };
 
 template <typename T>
 class EventStreamNotEmpty : public EventStreamTranslator<std::optional<T>, T> {
   public:
-    EventStreamNotEmpty(EventStream<std::optional<T>> wrappedEventStream)
+    EventStreamNotEmpty(EventStream<std::optional<T>>* wrappedEventStream)
     :
       EventStreamTranslator<std::optional<T>, T>(
-        EventStreamFilter<std::optional<T>>(
+        new EventStreamFilter<std::optional<T>>(
           wrappedEventStream,
           [](std::optional<T> value) {
             return value.has_value();
@@ -86,84 +93,77 @@ class EventStreamNotEmpty : public EventStreamTranslator<std::optional<T>, T> {
 };
 
 template <typename T>
-class InputToEventStreamNotEmpty : public EventStreamNotEmpty<T>, public Runnable {
-  private:
-    Input<std::optional<T>> _wrappedInput;
-
-  public:
-    InputToEventStreamNotEmpty(Input<std::optional<T>> wrappedInput, Runner runner)
-    :
-      Runnable(runner),
-      EventStreamNotEmpty<T>(
-        InputToEventStream<std::optional<T>>(wrappedInput)
-      )
-    { }
-
-    void run() {
-      _wrappedInput.run();
-    }
-};
-
-template <typename T>
 class EventStreamDebouncer : public EventStream<T>, public Runnable {
   private:
-    unsigned long _delay;
-    std::optional<Event<T>> _previousEvent;
+    Timer _timer;
+    std::optional<Event<T>> _firstEvent;
+    std::optional<Event<T>> _latestEvent;
 
-  public:
-    EventStreamDebouncer(EventStream<T> wrappedEventStream, unsigned long delay, Runner runner)
-    :
-      Runnable(runner),
-      _delay(delay),
-      _previousEvent(std::nullopt)
-    {
-      wrappedEventStream.registerSubscriber([this](Event<T> v) { this->receiveEvent(v); });
+    void _receiveEvent(Event<T> event) {
+      if (!_firstEvent.has_value()) {
+        _firstEvent = event;
+        _timer.restart();
+      } else {
+        _latestEvent = event;
+      }
     }
 
-    void receiveEvent(Event<T> event) {
-      // Here we only check for the age of the last delta event.
-      // If it's older than the delay, and it hasn't changed, leave it alone --
-      // it's settled, and it'll become the source for the next event.
-      // If it's younger than the delay, leave it alone regardless.
-      // If it's older than the delay and it has changed, register it as the new delta event.
-      // And if we've never received an event, of course register it as the new delta event.
-      if (!_previousEvent.has_value() || (_previousEvent.value().timestamp + _delay <= event.timestamp && _previousEvent.value().value != event.value)) {
-        _previousEvent = event;
-      }
+  public:
+    EventStreamDebouncer(EventStream<T>* wrappedEventStream, unsigned long delay)
+    :
+      Runnable(),
+      _timer(Timer(
+        delay,
+        [this]() {
+          if (!_latestEvent.has_value() || _latestEvent.value().value == _firstEvent.value().value) {
+            // Event value(s) held through debounce. Emit the original one.
+            this->_emit(_firstEvent.value());
+          }
+          // Reset the state either way, for the next debounce cycle.
+          _firstEvent = _latestEvent = std::nullopt;
+        },
+        1,
+        false,
+        false
+      ))
+    {
+      wrappedEventStream->registerSubscriber([this](Event<T> e) { this->_receiveEvent(e); });
     }
 
     void run() {
-      if (_previousEvent.has_value() && _previousEvent.value().timestamp + _delay <= millis()) {
-        // The only way the previous delta event can be old enough is if it's settled down.
-        // We emit the event with its original timestamp (which will now be at least as old as the debounce delay).
-        EventStream<T>::_emit(_previousEvent.value());
-      }
+      _timer.run();
     }
 };
 
-template <typename TEvent, typename TIndex>
+template <typename TIndex, typename TEvent>
 class EventStreamSwitcher : public EventStream<TEvent> {
   private:
-    std::map<TIndex, EventStream<TEvent>> _eventStreams;
-    Input<TIndex> _switchInput;
+    std::map<TIndex, EventStream<TEvent>*>* _eventStreams;
+    Input<TIndex>* _switchInput;
+    std::string _message;
+
+    void _receiveEventWithStreamIndex(TIndex index, Event<TEvent> event) {
+      if (_switchInput->read() == index) {
+        _message = "received event with stream index and it's the active stream";
+        this->_emit(event);
+      }
+      _message = "received event with stream index and it ain't the active stream";
+    }
 
   public:
-    EventStreamSwitcher(std::map<TIndex, EventStream<TEvent>> eventStreams, Input<TIndex> switchInput)
+    EventStreamSwitcher(std::map<TIndex, EventStream<TEvent>*>* eventStreams, Input<TIndex>* switchInput)
     :
       _eventStreams(eventStreams),
       _switchInput(switchInput)
     {
-      for (std::pair<const TIndex, EventStream<TEvent>>& stream : _eventStreams) {
-        stream.second.registerSubscriber([stream, this](Event<TEvent> v) { this->receiveEventWithStreamIndex(stream.first, v); });
+      _message = "entering constructor";
+      for (auto stream : *_eventStreams) {
+        stream.second->registerSubscriber([stream, this](Event<TEvent> e) { this->_receiveEventWithStreamIndex(stream.first, e); });
       }
+      _message = "registered all the subscribers";
     }
 
-    void receiveEventWithStreamIndex(TIndex index, Event<TEvent> event) {
-      std::optional<TIndex> switchValue = _switchInput.read();
-      if (switchValue.has_value() && switchValue.value() == index) {
-        _emit(event);
-      }
-    }
+    std::string getMessage() { return _message; }
 };
 
 #endif

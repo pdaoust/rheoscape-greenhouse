@@ -48,7 +48,7 @@ class Ds18b20 : public MultiInput<uint64_t, std::optional<float>> {
       _deviceTemperatureOffsets(deviceTemperatureOffsets),
       // We use an RepeatTimer here because unfortunately you can't poll using DallasTemperature.
       _timer(RepeatTimer(
-        millis(),
+        Timekeeper::nowMillis(),
         // This gnarly math is copied from https://github.com/milesburton/Arduino-Temperature-Control-Library/blob/master/examples/WaitForConversion/WaitForConversion.ino#L58
         // in which the proper timeout is determined by bit math
         750 / (1 << (12 - resolution)),
