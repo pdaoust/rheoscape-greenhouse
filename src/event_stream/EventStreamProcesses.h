@@ -135,7 +135,7 @@ class EventStreamDebouncer : public EventStream<T>, public Runnable {
 template <typename TIndex, typename TEvent>
 class EventStreamSwitcher : public EventStream<TEvent> {
   private:
-    std::map<TIndex, EventStream<TEvent>*>* _eventStreams;
+    std::map<TIndex, EventStream<TEvent>*> _eventStreams;
     Input<TIndex>* _switchInput;
     std::string _message;
 
@@ -148,13 +148,13 @@ class EventStreamSwitcher : public EventStream<TEvent> {
     }
 
   public:
-    EventStreamSwitcher(std::map<TIndex, EventStream<TEvent>*>* eventStreams, Input<TIndex>* switchInput)
+    EventStreamSwitcher(std::map<TIndex, EventStream<TEvent>*> eventStreams, Input<TIndex>* switchInput)
     :
       _eventStreams(eventStreams),
       _switchInput(switchInput)
     {
       _message = "entering constructor";
-      for (auto stream : *_eventStreams) {
+      for (auto stream : _eventStreams) {
         stream.second->registerSubscriber([stream, this](Event<TEvent> e) { this->_receiveEventWithStreamIndex(stream.first, e); });
       }
       _message = "registered all the subscribers";
