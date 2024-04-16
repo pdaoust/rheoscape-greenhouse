@@ -1,3 +1,5 @@
+#include <memory>
+
 #include <unity.h>
 
 #include <Runnable.h>

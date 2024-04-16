@@ -1,3 +1,5 @@
+#include <memory>
+
 #include <unity.h>
 
 #include <helpers/string_format.h>
@@ -174,22 +176,61 @@ void test_event_stream_debouncer() {
 
 void test_event_stream_switcher() {
   Timekeeper::setNowSim(0);
-  std::map<int, EventStream<std::string>*> streams = {
-    { 0, new BeaconEventStream<std::string>((std::string)"hello from Alice", 10) },
-    { 1, new BeaconEventStream<std::string>((std::string)"hello from Bob", 10) },
-    { 2, new BeaconEventStream<std::string>((std::string)"hello from Carol", 10) }
+  auto alice = new DumbEventStream<const char*>();
+  auto bob = new DumbEventStream<const char*>();
+  auto carol = new DumbEventStream<const char*>();
+  std::map<int, EventStream<const char*>*> streams = {
+    { 0, alice },
+    { 1, bob },
+    { 2, carol }
   };
   StateInput switchy(0);
-  EventStreamSwitcher<int, std::string> switcher(&streams, &switchy);
-  std::string message;
-  switcher.registerSubscriber([&message](Event<std::string> e) {
+  EventStreamSwitcher<int, const char*> switcher(streams, &switchy);
+  const char* message;
+  switcher.registerSubscriber([&message](Event<const char*> e) {
     message = e.value;
   });
-  for (unsigned long i = 0; i < 10; i ++) {
-    Timekeeper::tick();
-    Runner::run();
-  }
-  TEST_ASSERT_EQUAL_STRING("Hello from Alice", message.c_str());
+  alice->emit("Hello from Alice!");
+  bob->emit("Hello from Bob!");
+  carol->emit("Hello from Carol!");
+  TEST_ASSERT_EQUAL_STRING("Hello from Alice!", message);
+  switchy.write(1);
+  alice->emit("Hello from Alice!");
+  bob->emit("Hello from Bob!");
+  carol->emit("Hello from Carol!");
+  TEST_ASSERT_EQUAL_STRING("Hello from Bob!", message);
+  switchy.write(2);
+  alice->emit("Hello from Alice!");
+  bob->emit("Hello from Bob!");
+  carol->emit("Hello from Carol!");
+  TEST_ASSERT_EQUAL_STRING("Hello from Carol!", message);
+}
+
+void test_event_stream_combiner() {
+  Timekeeper::setNowSim(0);
+  auto alice = new DumbEventStream<const char*>();
+  auto bob = new DumbEventStream<const char*>();
+  auto carol = new DumbEventStream<const char*>();
+  std::vector<EventStream<const char*>*> streams = {
+    alice,
+    bob,
+    carol
+  };
+  EventStreamCombiner<const char*> combiner(streams);
+  const char* message;
+  combiner.registerSubscriber([&message](Event<const char*> e) {
+    message = e.value;
+  });
+  alice->emit("Hello from Alice!");
+  TEST_ASSERT_EQUAL_STRING("Hello from Alice!", message);
+  bob->emit("Hello from Bob!");
+  TEST_ASSERT_EQUAL_STRING("Hello from Bob!", message);
+  carol->emit("Hello from Carol!");
+  TEST_ASSERT_EQUAL_STRING("Hello from Carol!", message);
+}
+
+void test_fancy_pushbutton() {
+  TEST_FAIL_MESSAGE("write the test already");
 }
 
 int main(int argc, char **argv) {
@@ -201,5 +242,7 @@ int main(int argc, char **argv) {
   RUN_TEST(test_event_stream_not_empty);
   RUN_TEST(test_event_stream_debouncer);
   RUN_TEST(test_event_stream_switcher);
+  RUN_TEST(test_event_stream_combiner);
+  RUN_TEST(test_fancy_pushbutton);
   UNITY_END();
 }
