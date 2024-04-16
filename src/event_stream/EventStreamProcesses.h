@@ -163,4 +163,15 @@ class EventStreamSwitcher : public EventStream<TEvent> {
     std::string getMessage() { return _message; }
 };
 
+template <typename T>
+class EventStreamCombiner : public EventStream<T> {
+  public:
+    EventStreamCombiner(std::vector<EventStream<T>*> eventStreams)
+    {
+      for (int i = 0; i < eventStreams.size(); i ++) {
+        eventStreams[i]->registerSubscriber([this](Event<T> event) { this->_emit(event); });
+      }
+    }
+};
+
 #endif
