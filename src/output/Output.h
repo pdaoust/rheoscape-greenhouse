@@ -18,9 +18,9 @@
 // Be even gentler with things that have inductive loads in them.
 #define INDUCTIVE_LOAD_CYCLE_TIME 1000 * 60
 
-class Output : public Runnable {
+class Output {
   public:
-    Output() : Runnable() { }
+    Output() { }
 };
 
 #endif

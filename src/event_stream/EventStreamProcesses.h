@@ -15,9 +15,7 @@ class InputToEventStream : public EventStream<T>, public Runnable {
   
   public:
     InputToEventStream(Input<T>* wrappedInput)
-    :
-      Runnable(),
-      _wrappedInput(wrappedInput)
+    : _wrappedInput(wrappedInput)
     { }
 
     virtual void run() {
@@ -111,7 +109,6 @@ class EventStreamDebouncer : public EventStream<T>, public Runnable {
   public:
     EventStreamDebouncer(EventStream<T>* wrappedEventStream, unsigned long delay)
     :
-      Runnable(),
       _timer(Timer(
         delay,
         [this]() {

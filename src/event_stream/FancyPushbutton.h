@@ -76,7 +76,6 @@ class FancyPushbutton : public EventStream<FancyPushbuttonEvent>, public Runnabl
       // Any press longer than a long press will emit press events at this interval.
       uint16_t repeatInterval = 200
     ) :
-      Runnable(),
       _shortPressTime(shortPressTime),
       _longPressTime(longPressTime),
       _repeatInterval(repeatInterval)

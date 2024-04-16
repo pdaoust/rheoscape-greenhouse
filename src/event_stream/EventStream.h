@@ -51,7 +51,6 @@ class BeaconEventStream : public EventStream<T>, public Runnable {
   public:
     BeaconEventStream(Input<T>* input, unsigned long interval)
     : 
-      Runnable(),
       _timer(Timer(
         interval,
         [input, this]() {

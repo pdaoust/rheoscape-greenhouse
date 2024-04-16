@@ -86,7 +86,6 @@ class Timer : public Runnable {
   public:
     Timer(unsigned long interval, std::function<void(uint16_t)> callback, std::optional<uint16_t> times = 1, bool firstRunOnStart = false, bool start = true)
     :
-      Runnable(),
       _interval(interval),
       _callback(callback),
       _times(times),
@@ -98,7 +97,6 @@ class Timer : public Runnable {
       if (_firstRunOnStart && _times == 1) {
         throw std::invalid_argument("Setting firstRunOnStart to true when there's only one interval makes no sense.");
       }
-      Runner::registerCallback([this]() { this->run(); });
       if (start) {
         _start();
       }
