@@ -21,7 +21,7 @@ struct TwilioConfig {
 class TwilioMessageOutput : public Output {
   private:
     std::optional<std::string> _lastMessageSent;
-    Input<std::string> _input;
+    Input<std::string>* _input;
     Throttle _throttle;
     TwilioConfig _config;
     Twilio _client;
@@ -47,13 +47,13 @@ class TwilioMessageOutput : public Output {
     }
   
   public:
-    TwilioMessageOutput(Input<std::string> input, unsigned long sendEvery, TwilioConfig config)
+    TwilioMessageOutput(Input<std::string>* input, unsigned long sendEvery, TwilioConfig config)
     :
       _input(input),
       _throttle(Throttle(
         sendEvery,
         [this]() {
-          _sendMessage(_input.read());
+          _sendMessage(_input->read());
         }
       )),
       _config(config),

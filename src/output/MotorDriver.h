@@ -3,26 +3,26 @@
 
 #ifdef PLATFORM_ARDUINO
 
+#include <Runnable.h>
 #include <input/Input.h>
 #include <output/Output.h>
 
-class MotorDriver : public Output {
+class MotorDriver : public Output, public Runnable {
   private:
     uint8_t _forwardPin;
     uint8_t _backwardPin;
     uint8_t _pwmPin;
     // Does setting a pin HIGH activate it or deactivate it?
     bool _controlPinActiveState;
-    Input<float> _input;
+    Input<float>* _input;
 
   public:
-    MotorDriver(uint8_t forwardPin, uint8_t backwardPin, uint8_t pwmPin, bool controlPinActiveState, Input<float> input)
+    MotorDriver(uint8_t forwardPin, uint8_t backwardPin, uint8_t pwmPin, bool controlPinActiveState, Input<float>* input)
     : _forwardPin(forwardPin),
       _backwardPin(backwardPin),
       _pwmPin(pwmPin),
       _controlPinActiveState(controlPinActiveState),
-      _input(input),
-      Output(runner)
+      _input(input)
     {
       pinMode(_forwardPin, OUTPUT);
       pinMode(_backwardPin, OUTPUT);
@@ -31,8 +31,8 @@ class MotorDriver : public Output {
       }
     }
 
-    void run() {
-      std::optional<float> value = _input.read();
+    virtual void run() {
+      std::optional<float> value = _input->read();
       if (!value.has_value()) {
         return;
       }
