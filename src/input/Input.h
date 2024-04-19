@@ -2,11 +2,13 @@
 #define RHEOSCAPE_INPUT_H
 
 #include <map>
+#include <memory>
 #include <optional>
 #include <functional>
 #include <variant>
 #include <vector>
 
+#include <helpers/string_format.h>
 #include <Range.h>
 
 template <typename T>
@@ -28,35 +30,36 @@ class FunctionInput : public Input<T> {
 };
 
 template <typename TChan, typename TVal>
-class MultiInput {
+class AbstractMultiInput {
   public:
     virtual TVal readChannel(TChan channel) = 0;
-
-    Input<TVal> getInputForChannel(TChan channel);
 };
 
 template <typename TChan, typename TVal>
 class SingleChannelOfMultiInput : public Input<TVal> {
   private:
-    MultiInput<TChan, TVal>& _wrappedInput;
+    AbstractMultiInput<TChan, TVal>* _wrappedInput;
     TChan _channel;
 
   public:
-    SingleChannelOfMultiInput(MultiInput<TChan, TVal>& wrappedInput, TChan channel)
+    SingleChannelOfMultiInput(AbstractMultiInput<TChan, TVal>* wrappedInput, TChan channel)
       :
         _wrappedInput(wrappedInput),
         _channel(channel)
       { }
 
     virtual TVal read() {
-      return _wrappedInput.readChannel(_channel);
+      return _wrappedInput->readChannel(_channel);
     }
 };
 
 template <typename TChan, typename TVal>
-Input<TVal> MultiInput<TChan, TVal>::getInputForChannel(TChan channel) {
-  return SingleChannelOfMultiInput<TChan, TVal>(*this, channel);
-}
+class MultiInput : public AbstractMultiInput<TChan, TVal> {
+  public:
+    SingleChannelOfMultiInput<TChan, TVal> getInputForChannel(TChan channel) {
+      return SingleChannelOfMultiInput<TChan, TVal>(this, channel);
+    }
+};
 
 // Lift a constant into an input.
 template <typename T>
@@ -115,15 +118,18 @@ class StateInput : public Input<T> {
 template <typename TChan, typename TVal>
 class MapMultiInput : public MultiInput<TChan, TVal> {
   private:
-    std::map<TChan, Input<TVal>*> _inputs;
+    std::map<TChan, Input<TVal>*>* _inputs;
   
   public:
-    MapMultiInput(std::map<TChan, Input<TVal>*> inputs)
+    MapMultiInput(std::map<TChan, Input<TVal>*>* inputs)
     : _inputs(inputs)
     { }
 
     virtual TVal readChannel(TChan channel) {
-      Input<TVal>* input = _inputs[channel];
+      if (!_inputs->contains(channel)) {
+        std::__throw_invalid_argument(string_format("Channel %s doesn't exist", channel).c_str());
+      }
+      Input<TVal>* input = _inputs->at(channel);
       return input->read();
     }
 };

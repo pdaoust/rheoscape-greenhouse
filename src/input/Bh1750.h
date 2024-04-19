@@ -4,37 +4,38 @@
 #ifdef PLATFORM_ARDUINO
 
 #include <Arduino.h>
+#include <Timer.h>
 #include <input/Input.h>
 #include <Wire.h>
 #include <BH1750.h>
 
-class Bh1750 : public Input<std::optional<float>> {
+class Bh1750 : public Input<float> {
   private:
     BH1750 _lightMeter;
-    RepeatTimer _timer;
-    std::optional<float> _lastReadValue;
+    Timer _timer;
+    float _lastReadValue;
 
   public:
-    Bh1750(uint8_t address, unsigned long sampleInterval)
+    Bh1750(unsigned long sampleInterval, uint8_t address = 0x23)
     :
       _lightMeter(BH1750(address)),
-      _timer(RepeatTimer(
-        Timekeeper::nowMillis(),
+      _timer(Timer(
         sampleInterval,
         [this]() {
           if (_lightMeter.measurementReady()) {
             _lastReadValue = _lightMeter.readLightLevel();
           }
-          return _lastReadValue;
-        }
+        },
+        std::nullopt,
+        true
       ))
     {
       Wire.begin();
       _lightMeter.begin();
     }
 
-    std::optional<float> read() {
-      _timer.tick();
+    virtual float read() {
+      _timer.run();
       return _lastReadValue;
     }
 };

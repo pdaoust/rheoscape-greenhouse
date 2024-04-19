@@ -20,7 +20,7 @@ class DigitalPinInput : public Input<bool> {
       pinMode(_pin, mode);
     }
 
-    bool read() {
+    virtual bool read() {
       bool pinState = digitalRead(_pin);
       return _onState ? pinState : !pinState;
     }
@@ -29,27 +29,21 @@ class DigitalPinInput : public Input<bool> {
 class AnalogPinInput : public Input<float> {
   private:
     uint8_t _pin;
-    static uint8_t _resolution;
+    uint8_t _resolution;
     static bool _resolutionSetOnce;
 
   public:
-    AnalogPinInput(uint8_t pin)
+    AnalogPinInput(uint8_t pin, uint8_t resolution = 10)
     : _pin(pin)
     {
       if (!_resolutionSetOnce) {
-        setResolution(10);
+        analogReadResolution(16);
         _resolutionSetOnce = true;
       }
     }
 
-    float read() {
+    virtual float read() {
       return (float)analogRead(_pin) / (2 ^ _resolution - 1);
-    }
-
-    static void setResolution(uint8_t resolution) {
-      _resolution = resolution;
-      _resolutionSetOnce = true;
-      analogReadResolution(resolution);
     }
 };
 
