@@ -41,10 +41,14 @@ void test_multi_input() {
     { 1, new ConstantInput(6) },
     { 2, new ConstantInput(9) }
   };
-  MapMultiInput<int, int> input(inputs);
+  MapMultiInput<int, int> input(&inputs);
   TEST_ASSERT_EQUAL(3, input.readChannel(0));
   TEST_ASSERT_EQUAL(6, input.readChannel(1));
   TEST_ASSERT_EQUAL(9, input.readChannel(2));
+  inputs.insert({3, new ConstantInput(12)});
+  TEST_ASSERT_EQUAL(12, input.readChannel(3));
+  auto singleInput = input.getInputForChannel(2);
+  TEST_ASSERT_EQUAL(9, singleInput.read());
 }
 
 int main(int argc, char **argv) {
