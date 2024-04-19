@@ -13,6 +13,9 @@ void test_input_of_inputs() {
   InputOfInputs<int> inputOfInputs(&inputs);
   TEST_ASSERT_EQUAL(3, inputOfInputs.read().size());
   TEST_ASSERT_EQUAL(3, inputOfInputs.read()[0]);
+  inputs.push_back(new ConstantInput(12));
+  TEST_ASSERT_EQUAL(4, inputOfInputs.read().size());
+  TEST_ASSERT_EQUAL(12, inputOfInputs.read()[3]);
 }
 
 void test_input_of_mapped_inputs() {
@@ -24,6 +27,9 @@ void test_input_of_mapped_inputs() {
   InputOfMappedInputs<int, int> inputOfInputs(&inputs);
   TEST_ASSERT_EQUAL(3, inputOfInputs.read().size());
   TEST_ASSERT_EQUAL(3, inputOfInputs.read()[0]);
+  inputs.insert({3, new ConstantInput(12) });
+  TEST_ASSERT_EQUAL(4, inputOfInputs.read().size());
+  TEST_ASSERT_EQUAL(12, inputOfInputs.read()[3]);
 }
 
 void test_merging_range_process() {
