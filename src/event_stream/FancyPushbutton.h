@@ -68,7 +68,7 @@ class FancyPushbutton : public EventStream<FancyPushbuttonEvent>, public Runnabl
 
   public:
     FancyPushbutton(
-      EventStream<bool> wrappedEventStream,
+      EventStream<bool>* wrappedEventStream,
       // If a press is as long as this or shorter, it'll be considered a short press.
       uint16_t shortPressTime = 200,
       // If a press is longer than a short press, but as long as this or shorter, it'll be considered a long press.
@@ -80,7 +80,7 @@ class FancyPushbutton : public EventStream<FancyPushbuttonEvent>, public Runnabl
       _longPressTime(longPressTime),
       _repeatInterval(repeatInterval)
     {
-      wrappedEventStream.registerSubscriber([this](Event<bool> v) { this->receiveEvent(v); });
+      wrappedEventStream->registerSubscriber([this](Event<bool> v) { this->receiveEvent(v); });
     }
   
     void receiveEvent(Event<bool> event) {
@@ -192,9 +192,9 @@ class FancyPushbutton : public EventStream<FancyPushbuttonEvent>, public Runnabl
 
 FancyPushbutton makeFancyPushbutton(uint8_t inputPin, uint8_t pinMode, unsigned long debounceTime, unsigned long shortPressTime = 200, unsigned long longPressTime = 400, unsigned long repeatInterval = 200) {
   return FancyPushbutton(
-    EventStreamDebouncer(
-      InputToEventStream(
-        DigitalPinInput(inputPin, pinMode)
+    new EventStreamDebouncer<bool>(
+      new InputToEventStream<bool>(
+        new DigitalPinInput(inputPin, pinMode)
       ),
       debounceTime
     ),

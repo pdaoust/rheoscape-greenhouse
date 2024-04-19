@@ -10,24 +10,24 @@
 template <typename TBitmapIn>
 class BitmapBoxingProcess : public Input<Bitmap16> {
   private:
-    Input<std::tuple<TBitmapIn, FgBgColour>> _wrappedInput;
+    Input<std::tuple<TBitmapIn, FgBgColour>>* _wrappedInput;
     uint8_t _cornerRadius;
     Margins _padding;
 
   public:
-    BitmapBoxingProcess(Input<std::tuple<TBitmapIn, FgBgColour>> wrappedInput, uint8_t cornerRadius, Margins padding)
+    BitmapBoxingProcess(Input<std::tuple<TBitmapIn, FgBgColour>>* wrappedInput, uint8_t cornerRadius, Margins padding)
     :
       _wrappedInput(wrappedInput),
       _cornerRadius(cornerRadius),
       _padding(padding)
     { }
 
-    BitmapBoxingProcess(Input<TBitmapIn> bitmapInput, Input<FgBgColour> coloursInput, uint8_t cornerRadius, Margins padding)
+    BitmapBoxingProcess(Input<TBitmapIn>* bitmapInput, Input<FgBgColour>* coloursInput, uint8_t cornerRadius, Margins padding)
     : BitmapBoxingProcess(Merging2NotEmptyProcess<TBitmapIn, FgBgColour>(bitmapInput, coloursInput), cornerRadius, padding)
     { }
 
     std::optional<Bitmap16> read() {
-      std::optional<std::tuple<TBitmapIn, FgBgColour>> value = _wrappedInput.read();
+      std::optional<std::tuple<TBitmapIn, FgBgColour>> value = _wrappedInput->read();
       if (!value.has_value()) {
         return std::nullopt;
       }
@@ -61,12 +61,13 @@ class BitmapBoxingProcess : public Input<Bitmap16> {
 };
 
 template <typename TDisplayBitmap>
-class BitmapPositioningProcess : public TranslatingOptionalProcess<std::tuple<TDisplayBitmap, Coords>, PositionedBitmap<TDisplayBitmap>> {
+class BitmapPositioningProcess : public TranslatingProcess<std::tuple<TDisplayBitmap, Coords>, PositionedBitmap<TDisplayBitmap>> {
   public:
-    BitmapPositioningProcess(Input<TDisplayBitmap> bitmapInput, Input<Coords> positionInput)
+    BitmapPositioningProcess(Input<TDisplayBitmap>* bitmapInput, Input<Coords>* positionInput)
     :
-      TranslatingOptionalProcess<std::tuple<TDisplayBitmap, Coords>, PositionedBitmap<TDisplayBitmap>>(
-        Merging2NotEmptyProcess<TDisplayBitmap, Coords>(bitmapInput, positionInput),
+      TranslatingProcess<std::tuple<TDisplayBitmap, Coords>, PositionedBitmap<TDisplayBitmap>>(
+        // FIXME: memory leak
+        new Merging2Process<TDisplayBitmap, Coords>(bitmapInput, positionInput),
         [](std::tuple<TDisplayBitmap, Coords> value) {
           return PositionedBitmap<TDisplayBitmap>{
             std::get<0>(value),
@@ -76,12 +77,14 @@ class BitmapPositioningProcess : public TranslatingOptionalProcess<std::tuple<TD
       )
     { }
 
-    BitmapPositioningProcess(Input<TDisplayBitmap> bitmapInput, Input<int16_t> xInput, Input<int16_t> yInput)
+    BitmapPositioningProcess(Input<TDisplayBitmap>* bitmapInput, Input<int16_t>* xInput, Input<int16_t>* yInput)
     :
       BitmapPositioningProcess(
         bitmapInput,
-        TranslatingOptionalProcess(
-          Merging2NotEmptyProcess<int16_t, int16_t>(xInput, yInput),
+        // FIXME: memory leak
+        new TranslatingProcess<std::tuple<int16_t, int16_t>, Coords>(
+          // FIXME: memory leak
+          new Merging2Process<int16_t, int16_t>(xInput, yInput),
           [](std::tuple<int16_t, int16_t> value) {
             return Coords{std::get<0>(value), std::get<1>(value)};
           }
@@ -93,10 +96,10 @@ class BitmapPositioningProcess : public TranslatingOptionalProcess<std::tuple<TD
 template <typename TDisplayBitmapIn, typename TSizedBitmapOut, typename TCanvas, uint16_t W, uint16_t H>
 class CompositorProcess : public Input<TSizedBitmapOut> {
   private:
-    std::vector<Input<PositionedBitmap<TDisplayBitmapIn>>> _inputs;
+    std::vector<Input<PositionedBitmap<TDisplayBitmapIn>>>* _inputs;
 
   public:
-    CompositorProcess(std::vector<Input<PositionedBitmap<TDisplayBitmapIn>>> inputs)
+    CompositorProcess(std::vector<Input<PositionedBitmap<TDisplayBitmapIn>>>* inputs)
     : _inputs(inputs)
     { }
 
