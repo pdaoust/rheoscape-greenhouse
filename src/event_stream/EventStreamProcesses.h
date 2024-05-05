@@ -4,7 +4,9 @@
 #include <functional>
 
 #include <Runnable.h>
+#include <Timer.h>
 #include <input/Input.h>
+#include <input/TranslatingProcesses.h>
 #include <event_stream/EventStream.h>
 
 template <typename T>
@@ -171,6 +173,46 @@ class EventStreamCombiner : public EventStream<T> {
       for (int i = 0; i < eventStreams.size(); i ++) {
         eventStreams[i]->registerSubscriber([this](Event<T> event) { this->_emit(event); });
       }
+    }
+};
+
+template <typename T>
+class Beacon : public EventStream<T>, public Runnable {
+  private:
+    Timer _timer;
+    Input<bool>* _statusInput;
+
+  public:
+    Beacon(Input<T>* valueInput, Input<bool>* statusInput, unsigned long interval)
+    :
+      _statusInput(statusInput),
+      _timer(Timer(
+        interval,
+        [valueInput, this]() {
+          this->_emit(valueInput->read());
+        },
+        std::nullopt,
+        true,
+        true
+      ))
+    { }
+
+    Beacon(Input<std::optional<T>>* valueInput, unsigned long interval)
+    : Beacon(
+      // FIXME: two memory leaks
+      new TranslatingProcess<std::optional<T>, T>(valueInput, [](std::optional<T> value) { return value.value(); }),
+      new TranslatingProcess<std::optional<T>, bool>(valueInput, [](std::optional<T> value) { return value.has_value(); }),
+      interval
+    )
+    { }
+
+    virtual void run() {
+      if (_statusInput->read() && !_timer.isRunning()) {
+        _timer.restart();
+      } else if (!_statusInput->read() && _timer.isRunning()) {
+        _timer.cancel();
+      }
+      _timer.run();
     }
 };
 

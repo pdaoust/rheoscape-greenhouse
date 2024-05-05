@@ -40,4 +40,55 @@ class TranslatingOptionalProcess : public TranslatingProcess<std::optional<TIn>,
     { }
 };
 
+template <typename TKey, typename TIn, typename TOut>
+class TranslatingMultiProcess : public MultiInput<TKey, TOut> {
+  private:
+    MultiInput<TKey, TIn>* _wrappedProcess;
+    std::function<TOut(TIn, TKey)> _translator;
+  
+  public:
+    TranslatingMultiProcess(MultiInput<TKey, TIn>* wrappedProcess, std::function<TOut(TIn, TKey)> translator)
+    :
+      _wrappedProcess(wrappedProcess),
+      _translator(translator)
+    { }
+
+    virtual TOut readChannel(TKey key) {
+      return _translator(_wrappedProcess->readChannel(key), key);
+    }
+};
+
+template <typename T>
+class CalibrationProcess : public TranslatingProcess<T, T> {
+  public:
+    CalibrationProcess(Input<T>* wrappedInput, Input<T>* offsetInput)
+    : TranslatingProcess<T, T>(
+      wrappedInput,
+      [offsetInput](T value) { return value + offsetInput->read(); }
+    )
+    { }
+};
+
+template <typename T>
+class CalibrationOptionalProcess : public TranslatingOptionalProcess<T, T> {
+  public:
+    CalibrationOptionalProcess(Input<std::optional<T>>* wrappedInput, Input<T>* offsetInput)
+    : TranslatingOptionalProcess<T, T>(
+      wrappedInput,
+      [offsetInput](T value) { return value + offsetInput->read(); }
+    )
+    { }
+};
+
+template <typename TKey, typename TVal>
+class CalibrationMultiProcess : public TranslatingMultiProcess<TKey, TVal, TVal> {
+  public:
+    CalibrationMultiProcess(MultiInput<TKey, TVal>* wrappedInput, MultiInput<TKey, TVal>* offsetInput)
+    : TranslatingMultiProcess<TKey, TVal, TVal>(
+      wrappedInput,
+      [offsetInput](TVal value, TKey key) { return value + offsetInput->readChannel(key); }
+    )
+    { }
+};
+
 #endif

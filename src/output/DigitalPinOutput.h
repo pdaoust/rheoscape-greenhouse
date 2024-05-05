@@ -3,11 +3,10 @@
 
 #ifdef PLATFORM_ARDUINO
 
-#include <Runnable.h>
 #include <input/Input.h>
 #include <output/Output.h>
 
-class DigitalPinOutput : public Output, public Runnable {
+class DigitalPinOutput : public Output {
   private:
     // Does this relay go on when its pin is HIGH or LOW?
     bool _onState;

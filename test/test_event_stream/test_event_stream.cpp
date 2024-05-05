@@ -229,8 +229,79 @@ void test_event_stream_combiner() {
   TEST_ASSERT_EQUAL_STRING("Hello from Carol!", message);
 }
 
-void test_fancy_pushbutton() {
-  TEST_FAIL_MESSAGE("write the test already");
+void test_beacon_with_boolean_status_input() {
+  Timekeeper::setSource(TimekeeperSource::simTime);
+  ConstantInput valueInput(15);
+  StateInput statusInput(true);
+  Beacon beacon(&valueInput, &statusInput, 1000);
+  int beaconValue = 0;
+  int beaconEmittedCount = 0;
+  beacon.registerSubscriber([&beaconValue, &beaconEmittedCount](Event<int> e) {
+    beaconValue = e.value;
+    beaconEmittedCount ++;
+  });
+  for (unsigned long i = 0; i <= 3000; i ++) {
+    Timekeeper::setNowSim(i);
+    beacon.run();
+    TEST_ASSERT_EQUAL(i / 1000, beaconEmittedCount);
+    if (beaconEmittedCount > 0) {
+      TEST_ASSERT_EQUAL(15, beaconValue);
+    } else {
+      TEST_ASSERT_EQUAL(0, beaconValue);
+    }
+  }
+  statusInput.write(false);
+  for (unsigned long i = 3000; i <= 6000; i ++) {
+    Timekeeper::setNowSim(i);
+    beacon.run();
+    TEST_ASSERT_EQUAL(3, beaconEmittedCount);
+  }
+  statusInput.write(true);
+  for (unsigned long i = 6000; i <= 9000; i ++) {
+    Timekeeper::setNowSim(i);
+    beacon.run();
+    TEST_ASSERT_EQUAL(i / 1000 - 2, beaconEmittedCount);
+    TEST_ASSERT_EQUAL(15, beaconValue);
+  }
+}
+
+void test_beacon_with_optional_value_input() {
+  Timekeeper::setSource(TimekeeperSource::simTime);
+  StateInput<std::optional<int>> input(15);
+  Beacon beacon(&input, 1000);
+  int beaconValue = 0;
+  int beaconEmittedCount = 0;
+  beacon.registerSubscriber([&beaconValue, &beaconEmittedCount](Event<int> e) {
+    beaconValue = e.value;
+    beaconEmittedCount ++;
+  });
+  for (unsigned long i = 0; i <= 3000; i ++) {
+    Timekeeper::setNowSim(i);
+    beacon.run();
+    TEST_ASSERT_EQUAL(i / 1000, beaconEmittedCount);
+    if (beaconEmittedCount > 0) {
+      TEST_ASSERT_EQUAL(15, beaconValue);
+    } else {
+      TEST_ASSERT_EQUAL(0, beaconValue);
+    }
+  }
+  input.write(std::nullopt);
+  beaconValue = 0;
+  for (unsigned long i = 3000; i <= 6000; i ++) {
+    Timekeeper::setNowSim(i);
+    beacon.run();
+    TEST_ASSERT_EQUAL(0, beaconValue);
+    TEST_ASSERT_EQUAL(3, beaconEmittedCount);
+  }
+  input.write(16);
+  for (unsigned long i = 6000; i <= 9000; i ++) {
+    Timekeeper::setNowSim(i);
+    beacon.run();
+    TEST_ASSERT_EQUAL(i / 1000 - 2, beaconEmittedCount);
+    if (beaconEmittedCount > 3) {
+      TEST_ASSERT_EQUAL(16, beaconValue);
+    }
+  }
 }
 
 int main(int argc, char **argv) {
@@ -243,6 +314,7 @@ int main(int argc, char **argv) {
   RUN_TEST(test_event_stream_debouncer);
   RUN_TEST(test_event_stream_switcher);
   RUN_TEST(test_event_stream_combiner);
-  RUN_TEST(test_fancy_pushbutton);
+  RUN_TEST(test_beacon_with_boolean_status_input);
+  RUN_TEST(test_beacon_with_optional_value_input);
   UNITY_END();
 }

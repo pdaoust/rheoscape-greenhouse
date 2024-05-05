@@ -3,11 +3,10 @@
 
 #ifdef PLATFORM_ARDUINO
 
-#include <Runnable.h>
 #include <input/Input.h>
 #include <output/Output.h>
 
-class MotorDriver : public Output, public Runnable {
+class MotorDriver : public Output {
   private:
     uint8_t _forwardPin;
     uint8_t _backwardPin;
@@ -38,7 +37,8 @@ class MotorDriver : public Output, public Runnable {
       }
 
       if (_pwmPin > 0) {
-        // Normalise -1...0 to 0...255 and 0...1 to 0...255 too, to drive PWM pins.
+        // Normalise -1...0 to 0...1023 and 0...1 to 0...1023 too, to drive PWM pins.
+        // Positive vs negative happens in the next step.
         int pwmValue = round(abs(value.value()) * 1023);
         analogWrite(_pwmPin, pwmValue);
       }

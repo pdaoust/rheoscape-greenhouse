@@ -1,10 +1,7 @@
 #ifndef RHEOSCAPE_OUTPUT_H
 #define RHEOSCAPE_OUTPUT_H
 
-#include <input/Input.h>
-#include <Range.h>
 #include <Runnable.h>
-#include <Timer.h>
 
 // An output is not a special type of thing with its own class;
 // it's just a pattern of taking an input and implementing a run() function,
@@ -18,9 +15,6 @@
 // Be even gentler with things that have inductive loads in them.
 #define INDUCTIVE_LOAD_CYCLE_TIME 1000 * 60
 
-class Output {
-  public:
-    Output() { }
-};
+class Output : public Runnable { };
 
 #endif

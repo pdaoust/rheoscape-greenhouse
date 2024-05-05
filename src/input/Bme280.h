@@ -24,10 +24,6 @@ struct Bme280Reading {
 class Bme280 : public MultiInput<Bme280Channel, std::optional<float>>, Input<std::optional<Bme280Reading>> {
   private:
     BME280_DEV _input;
-    float _tempOffset;
-    float _humOffset;
-    float _pressOffset;
-    float _altOffset;
     std::optional<float> _lastReadTemp;
     std::optional<float> _lastReadPress;
     std::optional<float> _lastReadHum;
@@ -37,23 +33,19 @@ class Bme280 : public MultiInput<Bme280Channel, std::optional<float>>, Input<std
     void _read() {
       float temp, press, hum, alt;
       if (_input.getMeasurements(temp, press, hum, alt)) {
-        _lastReadTemp = temp + _tempOffset;
+        _lastReadTemp = temp;
         // Pressure is given in millibars, but we want it in kPa.
-        _lastReadPress = press * 10 + _pressOffset;
-        _lastReadHum = hum + _humOffset;
-        _lastReadAlt = alt + _altOffset;
+        _lastReadPress = press * 10;
+        _lastReadHum = hum;
+        _lastReadAlt = alt;
       }
     }
 
   public:
-    Bme280(uint8_t csPin, float tempOffset = 0.0, float humOffset = 0.0, float pressOffset = 0.0, float altOffset = 0.0)
+    Bme280(uint8_t csPin)
     :
       _spi(new SPIClass(HSPI)),
-      _input(BME280_DEV(csPin, HSPI, *_spi)),
-      _tempOffset(tempOffset),
-      _humOffset(humOffset),
-      _pressOffset(pressOffset),
-      _altOffset(altOffset)
+      _input(BME280_DEV(csPin, HSPI, *_spi))
     {
       while (!_input.begin(FORCED_MODE, OVERSAMPLING_X1, OVERSAMPLING_X1, OVERSAMPLING_X1, IIR_FILTER_OFF, TIME_STANDBY_1000MS));
     }

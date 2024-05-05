@@ -76,7 +76,8 @@ class Timer : public Runnable {
     bool _firstRunOnStart;
 
     void _start() {
-      _startTime = Timekeeper::nowMillis();
+      // If the firstRunOnStart flag is set, subtract one interval from the start time.
+      _startTime = Timekeeper::nowMillis() - (_firstRunOnStart ? _interval : 0);
       _count = 0;
       _isComplete = false;
       _isCancelled = false;
@@ -112,8 +113,7 @@ class Timer : public Runnable {
       }
 
       unsigned long now = Timekeeper::nowMillis();
-      // If the firstRunOnStart flag is set, subtract one interval from the start time.
-      unsigned long elapsed = now - (_startTime + (_count - (_firstRunOnStart ? 1 : 0)) * _interval);
+      unsigned long elapsed = now - (_startTime + _count * _interval);
       if (elapsed < _interval) {
         return;
       }
