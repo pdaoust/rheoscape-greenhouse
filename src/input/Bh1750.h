@@ -16,7 +16,9 @@ class Bh1750 : public Input<float> {
     float _lastReadValue;
 
   public:
-    Bh1750(unsigned long sampleInterval, uint8_t address = 0x23)
+    const uint8_t BH1750_DEFAULT_ADDRESS = 0x23;
+
+    Bh1750(unsigned long sampleInterval, uint8_t address = BH1750_DEFAULT_ADDRESS, TwoWire* i2c)
     :
       _lightMeter(BH1750(address)),
       _timer(Timer(
@@ -30,9 +32,12 @@ class Bh1750 : public Input<float> {
         true
       ))
     {
-      Wire.begin();
-      _lightMeter.begin();
+      _lightMeter.begin(BH1750::Mode::CONTINUOUS_HIGH_RES_MODE, address, i2c);
     }
+
+    Bh1750(unsigned long sampleInterval, TwoWire* i2c)
+    : Bh1750(sampleInterval, BH1750_DEFAULT_ADDRESS, i2c)
+    { }
 
     virtual float read() {
       _timer.run();

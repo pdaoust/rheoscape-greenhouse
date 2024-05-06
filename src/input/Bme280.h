@@ -28,7 +28,6 @@ class Bme280 : public MultiInput<Bme280Channel, std::optional<float>>, Input<std
     std::optional<float> _lastReadPress;
     std::optional<float> _lastReadHum;
     std::optional<float> _lastReadAlt;
-    SPIClass* _spi;
 
     void _read() {
       float temp, press, hum, alt;
@@ -41,18 +40,23 @@ class Bme280 : public MultiInput<Bme280Channel, std::optional<float>>, Input<std
       }
     }
 
-  public:
-    Bme280(uint8_t csPin)
-    :
-      _spi(new SPIClass(HSPI)),
-      _input(BME280_DEV(csPin, HSPI, *_spi))
-    {
-      while (!_input.begin(FORCED_MODE, OVERSAMPLING_X1, OVERSAMPLING_X1, OVERSAMPLING_X1, IIR_FILTER_OFF, TIME_STANDBY_1000MS));
+    void _begin() {
+      _input.begin(FORCED_MODE, OVERSAMPLING_X1, OVERSAMPLING_X1, OVERSAMPLING_X1, IIR_FILTER_OFF, TIME_STANDBY_1000MS);
     }
 
-    ~Bme280() {
-      // Not sure if this is needed, but I suspect the BME280 doesn't clean up the SPI reference it gets.
-      delete _spi;
+  public:
+    Bme280(uint8_t csPin, SPIClass* spi)
+    :
+      _input(BME280_DEV(csPin, (uint8_t)HSPI, *spi))
+    {
+      _begin();
+    }
+
+    Bme280(TwoWire* i2c)
+    :
+      _input(BME280_DEV(*i2c))
+    {
+      _begin();
     }
 
     virtual std::optional<float> readChannel(Bme280Channel channel) {

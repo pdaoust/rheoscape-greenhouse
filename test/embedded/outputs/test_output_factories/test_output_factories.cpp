@@ -2,7 +2,7 @@
 
 #include <Arduino.h>
 #include <unity.h>
-#include <arduino_test_constants.h>
+#include <arduino_test_setup.h>
 #include <output/OutputFactories.h>
 
 void test_make_relay() {

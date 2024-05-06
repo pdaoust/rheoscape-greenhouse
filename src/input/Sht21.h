@@ -32,12 +32,12 @@ class Sht21 : public MultiInput<Sht21Channel, std::optional<float>> {
     _SensorMode _mode;
 
   public:
-    Sht21(uint8_t dataPin, uint8_t clockPin)
+    Sht21(TwoWire* i2c)
     :
       _mode(_SensorMode::NotPolling),
       _sensor(SHT21())
     {
-      _sensor.begin(dataPin, clockPin);
+      _sensor.begin(i2c);
     }
 
     std::optional<float> readChannel(Sht21Channel channel) {

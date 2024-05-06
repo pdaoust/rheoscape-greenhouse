@@ -5,10 +5,10 @@
 
 #include <helpers/string_format.h>
 #include <input/Bh1750.h>
-#include <arduino_test_constants.h>
+#include <arduino_test_setup.h>
 
 void test_bh1750() {
-  Bh1750 lightMeter(1000);
+  Bh1750 lightMeter(1000, i2cBus());
   float lightLevel = lightMeter.read();
   TEST_ASSERT_TRUE(lightLevel > 0);
   float lightLevel2 = lightMeter.read();

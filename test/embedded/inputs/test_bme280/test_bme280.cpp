@@ -6,10 +6,10 @@
 
 #include <input/Bme280.h>
 
-#include <arduino_test_constants.h>
+#include <arduino_test_setup.h>
 
 void test_bme280() {
-  Bme280 sensor(SPI_BME280_CS_PIN);
+  Bme280 sensor(i2cBus());
   for (int i = 0; i < 1000; i ++) {
     delay(1);
     std::optional<float> temp = sensor.readChannel(Bme280Channel::tempC);

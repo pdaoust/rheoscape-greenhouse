@@ -2,7 +2,7 @@
 
 #include <Arduino.h>
 #include <unity.h>
-#include <arduino_test_constants.h>
+#include <arduino_test_setup.h>
 #include <output/DigitalPinOutput.h>
 
 void test_digital_pin_output() {

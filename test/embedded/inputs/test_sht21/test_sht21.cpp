@@ -4,10 +4,10 @@
 #include <unity.h>
 
 #include <input/Sht21.h>
-#include <arduino_test_constants.h>
+#include <arduino_test_setup.h>
 
 void test_sht21() {
-  Sht21 sensor(I2C_SDA_PIN, I2C_SCL_PIN);
+  Sht21 sensor(i2cBus());
   sensor.readChannel(Sht21Channel::tempC);
   delay(100);
   auto temp = sensor.readChannel(Sht21Channel::tempC);

@@ -2,7 +2,7 @@
 
 #include <Arduino.h>
 #include <unity.h>
-#include <arduino_test_constants.h>
+#include <arduino_test_setup.h>
 #include <output/MotorDriver.h>
 
 void test_motor_driver() {

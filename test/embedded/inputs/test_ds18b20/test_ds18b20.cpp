@@ -5,9 +5,9 @@
 
 #include <input/Ds18b20.h>
 
-#include <arduino_test_constants.h>
+#include <arduino_test_setup.h>
 
-Ds18b20 thermometersBus(ONE_WIRE_DATA_PIN);
+Ds18b20 thermometersBus(oneWireBus());
 
 void test_ds18b20() {
   for (int i = 0; i < 1000; i ++) {

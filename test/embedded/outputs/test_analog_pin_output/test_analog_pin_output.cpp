@@ -1,7 +1,7 @@
 #ifdef PLATFORM_ARDUINO
 
 #include <unity.h>
-#include <arduino_test_constants.h>
+#include <arduino_test_setup.h>
 #include <output/AnalogPinOutput.h>
 
 void test_analog_pin_output() {

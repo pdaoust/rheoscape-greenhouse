@@ -32,7 +32,7 @@ uint64_t deviceAddressToInt(DeviceAddress deviceAddress) {
 
 class Ds18b20 : public MultiInput<uint64_t, std::optional<float>>, public Input<std::map<uint64_t, std::optional<float>>> {
   private:
-    OneWire _bus;
+    OneWire* _bus;
     DallasTemperature _inputs;
     std::vector<uint64_t> _deviceAddresses;
     std::map<uint64_t, std::optional<float>> _deviceTemperatures;
@@ -46,9 +46,9 @@ class Ds18b20 : public MultiInput<uint64_t, std::optional<float>>, public Input<
       sixteenth_degree = 12
     };
 
-    Ds18b20(uint8_t dataPin, Resolution resolution = half_degree)
+    Ds18b20(OneWire* bus, Resolution resolution = half_degree)
     :
-      _bus(OneWire(dataPin)),
+      _bus(bus),
       // We use a Timer to throttle reads here because unfortunately you can't poll using DallasTemperature.
       _timer(Timer(
         // This gnarly math is copied from https://github.com/milesburton/Arduino-Temperature-Control-Library/blob/master/examples/WaitForConversion/WaitForConversion.ino#L58
@@ -77,7 +77,7 @@ class Ds18b20 : public MultiInput<uint64_t, std::optional<float>>, public Input<
       // First, find out what devices are on the bus.
       scanBus();
 
-      _inputs = DallasTemperature(&_bus);
+      _inputs = DallasTemperature(_bus);
       _inputs.setResolution(resolution);
       // Set up in async mode.
       _inputs.setWaitForConversion(false);
@@ -99,7 +99,7 @@ class Ds18b20 : public MultiInput<uint64_t, std::optional<float>>, public Input<
     void scanBus() {
       uint8_t dAddress[8];
       _deviceAddresses = std::vector<uint64_t>();
-      while (_bus.search(dAddress)) {
+      while (_bus->search(dAddress)) {
         _deviceAddresses.push_back(deviceAddressToInt(dAddress));
       }
     }

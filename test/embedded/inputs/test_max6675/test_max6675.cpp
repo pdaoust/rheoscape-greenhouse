@@ -4,10 +4,10 @@
 #include <unity.h>
 
 #include <input/Max6675.h>
-#include <arduino_test_constants.h>
+#include <arduino_test_setup.h>
 
 void test_max6675() {
-  Max6675 sensor(SPI_MAX6675_CS_PIN, SPI_CIPO_PIN, SPI_CLK_PIN);
+  Max6675 sensor(SPI_MAX6675_CS_PIN, spiBus());
   auto temp = sensor.read();
   TEST_ASSERT_TRUE(temp.has_value());
   TEST_ASSERT_TRUE(temp.value() > 18 && temp.value() < 25);
