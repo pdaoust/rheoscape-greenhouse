@@ -191,9 +191,8 @@ class Beacon : public EventStream<T>, public Runnable {
         [valueInput, this]() {
           this->_emit(valueInput->read());
         },
-        std::nullopt,
-        true,
-        true
+        std::nullopt
+        // We would emit an event on first run, but there's no event handler yet to listen to it.
       ))
     { }
 
