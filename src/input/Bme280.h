@@ -23,7 +23,7 @@ struct Bme280Reading {
 
 class Bme280 : public MultiInput<Bme280Channel, std::optional<float>>, Input<std::optional<Bme280Reading>> {
   private:
-    BME280_DEV _input;
+    BME280_DEV _sensor;
     std::optional<float> _lastReadTemp;
     std::optional<float> _lastReadPress;
     std::optional<float> _lastReadHum;
@@ -31,7 +31,7 @@ class Bme280 : public MultiInput<Bme280Channel, std::optional<float>>, Input<std
 
     void _read() {
       float temp, press, hum, alt;
-      if (_input.getMeasurements(temp, press, hum, alt)) {
+      if (_sensor.getMeasurements(temp, press, hum, alt)) {
         _lastReadTemp = temp;
         // Pressure is given in millibars, but we want it in kPa.
         _lastReadPress = press * 10;
@@ -41,20 +41,20 @@ class Bme280 : public MultiInput<Bme280Channel, std::optional<float>>, Input<std
     }
 
     void _begin() {
-      _input.begin(FORCED_MODE, OVERSAMPLING_X1, OVERSAMPLING_X1, OVERSAMPLING_X1, IIR_FILTER_OFF, TIME_STANDBY_1000MS);
+      _sensor.begin(FORCED_MODE, OVERSAMPLING_X1, OVERSAMPLING_X1, OVERSAMPLING_X1, IIR_FILTER_OFF, TIME_STANDBY_1000MS);
     }
 
   public:
     Bme280(uint8_t csPin, SPIClass* spi)
     :
-      _input(BME280_DEV(csPin, (uint8_t)HSPI, *spi))
+      _sensor(BME280_DEV(csPin, (uint8_t)HSPI, *spi))
     {
       _begin();
     }
 
     Bme280(TwoWire* i2c)
     :
-      _input(BME280_DEV(*i2c))
+      _sensor(BME280_DEV(*i2c))
     {
       _begin();
     }
