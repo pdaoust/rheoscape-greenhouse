@@ -29,7 +29,7 @@ class Timekeeper {
       switch (Timekeeper::_source) {
         case TimekeeperSource::systemTime:
 #ifdef PLATFORM_ARDUINO
-          return Timekeeper::nowMillis();
+          return millis();
 #else
 #ifdef PLATFORM_DEV_MACHINE
           return (unsigned long)duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now().time_since_epoch()).count();
