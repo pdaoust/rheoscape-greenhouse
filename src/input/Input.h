@@ -10,6 +10,7 @@
 
 #include <helpers/string_format.h>
 #include <Range.h>
+#include <event_stream/EventStream.h>
 
 template <typename T>
 class Input {
@@ -97,7 +98,7 @@ class PointerInput : public Input<T> {
 
 // A simple input whose value can be set.
 template <typename T>
-class StateInput : public Input<T> {
+class StateInput : public Input<T>, public EventStream<T> {
   private:
     T _value;
 
@@ -112,6 +113,7 @@ class StateInput : public Input<T> {
 
     void write(T value) {
       _value = value;
+      this->_emit(value);
     }
 };
 

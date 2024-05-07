@@ -22,9 +22,12 @@ void test_make_range_constant_input() {
 
 void test_state_input() {
   StateInput input(3);
+  bool eventWasEmitted = false;
+  input.registerSubscriber([&eventWasEmitted](Event<int> e) { eventWasEmitted = true; });
   TEST_ASSERT_EQUAL(3, input.read());
   input.write(5);
   TEST_ASSERT_EQUAL(5, input.read());
+  TEST_ASSERT_TRUE(eventWasEmitted);
 }
 
 void test_pointer_input() {
