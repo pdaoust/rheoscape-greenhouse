@@ -260,7 +260,7 @@ void test_beacon_with_boolean_status_input() {
   for (unsigned long i = 6000; i <= 9000; i ++) {
     Timekeeper::setNowSim(i);
     beacon.run();
-    TEST_ASSERT_EQUAL(i / 1000 - 2, beaconEmittedCount);
+    TEST_ASSERT_EQUAL(i / 1000 - 3, beaconEmittedCount);
     TEST_ASSERT_EQUAL(15, beaconValue);
   }
 }
@@ -297,7 +297,7 @@ void test_beacon_with_optional_value_input() {
   for (unsigned long i = 6000; i <= 9000; i ++) {
     Timekeeper::setNowSim(i);
     beacon.run();
-    TEST_ASSERT_EQUAL(i / 1000 - 2, beaconEmittedCount);
+    TEST_ASSERT_EQUAL(i / 1000 - 3, beaconEmittedCount);
     if (beaconEmittedCount > 3) {
       TEST_ASSERT_EQUAL(16, beaconValue);
     }
