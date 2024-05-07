@@ -95,7 +95,9 @@ void test_timer_can_repeat() {
 void test_timer_runs_if_interval_is_past() {
   Timekeeper::setSource(TimekeeperSource::simTime);
   uint8_t didRunTimes = 0;
-  Timer timer(10, [&didRunTimes](){ didRunTimes ++; }, 3);
+  // Set up a timer that's allowed to 'catch up'
+  // by running more than once if it missed more than one interval.
+  Timer timer(10, [&didRunTimes](){ didRunTimes ++; }, 3, false, true, true);
   // Before the interval is up, it shouldn't have run at all.
   timer.run();
   TEST_ASSERT_EQUAL(0, didRunTimes);
@@ -104,26 +106,70 @@ void test_timer_runs_if_interval_is_past() {
   timer.run();
   TEST_ASSERT_EQUAL(1, didRunTimes);
   // Now pretend it hogged up two more intervals + 1 ms.
+  // It should run twice.
   Timekeeper::setNowSim(31);
   timer.run();
   TEST_ASSERT_EQUAL(3, didRunTimes);
+
+  // Now Do the same, but with a timer that's not allowed to catch up.
+  didRunTimes = 0;
+  timer = Timer(10, [&didRunTimes](){ didRunTimes ++; }, 3, false, true, false);
+  timer.run();
+  TEST_ASSERT_EQUAL(0, didRunTimes);
+  Timekeeper::setNowSim(11);
+  timer.run();
+  TEST_ASSERT_EQUAL(1, didRunTimes);
+  Timekeeper::setNowSim(31);
+  timer.run();
+  // This time, it should have only run once.
+  TEST_ASSERT_EQUAL(2, didRunTimes);
+}
+
+void test_timer_doesnt_run_twice_in_same_milli() {
+  Timekeeper::setSource(TimekeeperSource::simTime);
+  uint8_t didRunTimes = 0;
+  Timer timer(10, [&didRunTimes](){ didRunTimes ++; }, std::nullopt);
+  // Before the interval is up, it shouldn't have run at all.
+  timer.run();
+  TEST_ASSERT_EQUAL(0, didRunTimes);
+  Timekeeper::setNowSim(10);
+  timer.run();
+  timer.run();
+  TEST_ASSERT_EQUAL(1, didRunTimes);
 }
 
 // A timer should handle the dreaded millis rollover without complaint.
 void test_timer_rolls_over() {
   bool didRun = false;
+  unsigned long runCount = 0;
   Timekeeper::setSource(TimekeeperSource::simTime);
   Timekeeper::setNowSim(ULONG_MAX - 5);
-  Timer timer(100, [&didRun]() {
-    didRun = true;
-  });
-  for (uint16_t i = 0; i < 100; i ++) {
+  Timer timer(
+    1000,
+    [&didRun, &runCount]() {
+      didRun = true;
+      runCount ++;
+    },
+    std::nullopt
+  );
+  for (unsigned long i = ULONG_MAX - 5; i < 1000 - 5; i ++) {
+    Timekeeper::setNowSim(i);
     timer.run();
     TEST_ASSERT_FALSE(didRun);
-    Timekeeper::tick();
   }
+  Timekeeper::setNowSim(1000 - 5);
   timer.run();
   TEST_ASSERT_TRUE(didRun);
+  TEST_ASSERT_EQUAL(1, runCount);
+  // Ah, but can it handle a _second_ rollover?
+  Timekeeper::setNowSim(ULONG_MAX - 5);
+  timer.run();
+  // Timer isn't trying to catch up, so it should only have run one more time.
+  TEST_ASSERT_EQUAL(2, runCount);
+  // But it should run one more time after the second rollover.
+  Timekeeper::setNowSim(1000);
+  timer.run();
+  TEST_ASSERT_EQUAL(3, runCount);
 }
 
 void test_timer_can_run_immediately() {
