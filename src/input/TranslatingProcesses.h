@@ -59,9 +59,9 @@ class TranslatingMultiProcess : public MultiInput<TKey, TOut> {
 };
 
 template <typename T>
-class CalibrationProcess : public TranslatingProcess<T, T> {
+class OnePointCalibrationProcess : public TranslatingProcess<T, T> {
   public:
-    CalibrationProcess(Input<T>* wrappedInput, Input<T>* offsetInput)
+    OnePointCalibrationProcess(Input<T>* wrappedInput, Input<T>* offsetInput)
     : TranslatingProcess<T, T>(
       wrappedInput,
       [offsetInput](T value) { return value + offsetInput->read(); }
@@ -70,9 +70,9 @@ class CalibrationProcess : public TranslatingProcess<T, T> {
 };
 
 template <typename T>
-class CalibrationOptionalProcess : public TranslatingOptionalProcess<T, T> {
+class OnePointCalibrationOptionalProcess : public TranslatingOptionalProcess<T, T> {
   public:
-    CalibrationOptionalProcess(Input<std::optional<T>>* wrappedInput, Input<T>* offsetInput)
+    OnePointCalibrationOptionalProcess(Input<std::optional<T>>* wrappedInput, Input<T>* offsetInput)
     : TranslatingOptionalProcess<T, T>(
       wrappedInput,
       [offsetInput](T value) { return value + offsetInput->read(); }
@@ -81,12 +81,50 @@ class CalibrationOptionalProcess : public TranslatingOptionalProcess<T, T> {
 };
 
 template <typename TKey, typename TVal>
-class CalibrationMultiProcess : public TranslatingMultiProcess<TKey, TVal, TVal> {
+class OnePointCalibrationMultiProcess : public TranslatingMultiProcess<TKey, TVal, TVal> {
   public:
-    CalibrationMultiProcess(MultiInput<TKey, TVal>* wrappedInput, MultiInput<TKey, TVal>* offsetInput)
+    OnePointCalibrationMultiProcess(MultiInput<TKey, TVal>* wrappedInput, MultiInput<TKey, TVal>* offsetInput)
     : TranslatingMultiProcess<TKey, TVal, TVal>(
       wrappedInput,
       [offsetInput](TVal value, TKey key) { return value + offsetInput->readChannel(key); }
+    )
+    { }
+};
+
+template <typename T>
+T adjustToTwoPointCalibratedValue(T value, Range<T> referenceRange, Range<T> offsetRange) {
+  return (((value - offsetRange.min) * (referenceRange.max - referenceRange.min)) / (offsetRange.max - offsetRange.min)) + referenceRange.min;
+}
+
+template <typename T>
+class TwoPointCalibrationProcess : public TranslatingProcess<T, T> {
+  public:
+    TwoPointCalibrationProcess(Input<T>* wrappedInput, Input<Range<T>>* referenceRangeInput, Input<Range<T>>* offsetRangeInput)
+    : TranslatingProcess<T, T>(
+      wrappedInput,
+      [referenceRangeInput, offsetRangeInput](T value) { return adjustToTwoPointCalibratedValue(value, referenceRangeInput->read(), offsetRangeInput->read()); }
+    )
+    { }
+};
+
+template <typename T>
+class TwoPointCalibrationOptionalProcess : public TranslatingOptionalProcess<T, T> {
+  public:
+    TwoPointCalibrationOptionalProcess(Input<std::optional<T>>* wrappedInput, Input<Range<T>>* referenceRangeInput, Input<Range<T>>* offsetRangeInput)
+    : TranslatingOptionalProcess<T, T>(
+      wrappedInput,
+      [referenceRangeInput, offsetRangeInput](T value) { return adjustToTwoPointCalibratedValue(value, referenceRangeInput->read(), offsetRangeInput->read()); }
+    )
+    { }
+};
+
+template <typename TKey, typename TVal>
+class TwoPointCalibrationMultiProcess : public TranslatingMultiProcess<TKey, TVal, TVal> {
+  public:
+    TwoPointCalibrationMultiProcess(MultiInput<TKey, TVal>* wrappedInput, MultiInput<TKey, Range<TVal>>* referenceRangeMapInput, MultiInput<TKey, Range<TVal>>* offsetRangeMapInput)
+    : TranslatingMultiProcess<TKey, TVal, TVal>(
+      wrappedInput,
+      [referenceRangeMapInput, offsetRangeMapInput](TVal value, TKey key) { return adjustToTwoPointCalibratedValue(value, referenceRangeMapInput->readChannel(key), offsetRangeMapInput->readChannel(key)); }
     )
     { }
 };
