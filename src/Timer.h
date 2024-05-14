@@ -89,7 +89,9 @@ class Timer : public Runnable {
     Timer(
       // How often to run the timer.
       unsigned long interval,
-      // What to run. The callback can take the count of times it's run so far, not counting the current run.
+      // What to run.
+      // The callback can take the count of times it's run so far, not counting the current run.
+      // Note that it's just a 16-bit number, so it'll roll over at 65536.
       std::function<void(uint16_t)> callback,
       // An optional number of times to run, after which it'll stop.
       // times × interval MUST fit into ULONG_MAX.
@@ -200,6 +202,7 @@ class Timer : public Runnable {
       return _isCancelled;
     }
 
+    // Remember that this rolls over at 65536!
     uint16_t getCount() {
       run();
       return _passedIntervals;
