@@ -22,7 +22,7 @@ void test_timer_runs() {
   Timekeeper::setSource(TimekeeperSource::simTime);
   Timer timer(100, [&didRun]() {
     didRun = true;
-  });
+  }, 1);
   for (uint16_t i = 0; i < 100; i ++) {
     Timekeeper::setNowSim(i);
     timer.run();
@@ -35,7 +35,7 @@ void test_timer_runs() {
 
 void test_timer_knows_its_state() {
   Timekeeper::setSource(TimekeeperSource::simTime);
-  Timer timer(100, [](){});
+  Timer timer(100, [](){}, 1);
   for (uint16_t i = 1; i < 100; i ++) {
     Timekeeper::setNowSim(i);
     timer.run();
@@ -68,7 +68,7 @@ void test_timer_knows_its_state() {
 
 void test_timer_can_be_cancelled() {
   Timekeeper::setSource(TimekeeperSource::simTime);
-  Timer timer(100, [](){});
+  Timer timer(100, [](){}, 1);
   timer.run();
   timer.cancel();
   for (uint16_t i = 1; i <= 100; i ++) {

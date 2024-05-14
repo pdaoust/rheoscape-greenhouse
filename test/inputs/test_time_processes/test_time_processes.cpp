@@ -68,6 +68,32 @@ void test_slow_pwm_process() {
     Timekeeper::setNowSim(i);
     TEST_ASSERT_FALSE_MESSAGE(pwm.read(), string_format("should be false at %d ms", i).c_str());
   }
+  // Lastly, it should handle counter rollover gracefully.
+  for (unsigned long i = 65500; i < 65550; i ++) {
+    Timekeeper::setNowSim(i);
+    TEST_ASSERT_TRUE_MESSAGE(pwm.read(), string_format("should be true at %d ms", i).c_str());
+  }
+  for (unsigned long i = 65550; i < 65600; i ++) {
+    Timekeeper::setNowSim(i);
+    TEST_ASSERT_FALSE_MESSAGE(pwm.read(), string_format("should be false at %d ms", i).c_str());
+  }
+  for (unsigned long i = 65600; i < 65650; i ++) {
+    Timekeeper::setNowSim(i);
+    TEST_ASSERT_TRUE_MESSAGE(pwm.read(), string_format("should be true at %d ms", i).c_str());
+  }
+  // More than one rollover, for good measure.
+  for (unsigned long i = 131000; i < 131050; i ++) {
+    Timekeeper::setNowSim(i);
+    TEST_ASSERT_TRUE_MESSAGE(pwm.read(), string_format("should be true at %d ms", i).c_str());
+  }
+  for (unsigned long i = 131050; i < 131100; i ++) {
+    Timekeeper::setNowSim(i);
+    TEST_ASSERT_FALSE_MESSAGE(pwm.read(), string_format("should be false at %d ms", i).c_str());
+  }
+  for (unsigned long i = 131100; i < 131150; i ++) {
+    Timekeeper::setNowSim(i);
+    TEST_ASSERT_TRUE_MESSAGE(pwm.read(), string_format("should be true at %d ms", i).c_str());
+  }
 }
 
 void test_hysteresis_process() {
