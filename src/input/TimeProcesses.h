@@ -128,28 +128,42 @@ class SlowPwmProcess : public Input<bool> {
   private:
     Timer _timer;
     bool _currentValue;
+    uint16_t _rollovers;
+    uint16_t _lastCounter;
   
   public:
     SlowPwmProcess(
       Input<float>* wrappedInput,
       // The length of a cycle.
       unsigned long interval,
-      // The number of steps in a cycle. interval / stepsPerInterval = step duration.
-      // Make sure this interval is divisible by stepsPerInterval, cuz we aren't doing float math on timespans!
-      uint8_t stepsPerInterval
+      // The number of steps in a cycle. interval / resolution = step duration.
+      // Make sure this interval is divisible by resolution, cuz we aren't doing float math on timespans!
+      uint8_t resolution
     ) :
+      _rollovers(0),
+      _lastCounter(0),
       _timer(Timer(
-        interval / stepsPerInterval,
-        [this, &wrappedInput, stepsPerInterval](uint16_t count) {
+        interval / resolution,
+        [this, &wrappedInput, resolution](uint16_t count) {
+          // The resolution of the counter isn't enough to reliably cross rollovers.
+          // This keeps an internal rollover monitor and allows accurate rollover crossing.
+          if (_lastCounter > count) {
+            _rollovers ++;
+          }
+          _lastCounter = count;
+
           float value = wrappedInput->read();
-          unsigned long stepsPassedInInterval = count % stepsPerInterval;
-          float stepsPassedAsFraction = (float)stepsPassedInInterval / (float)stepsPerInterval;
+          uint16_t stepsPassedInInterval = (count + UINT16_MAX % resolution * _rollovers + _rollovers) % resolution;
+          float stepsPassedAsFraction = (float)stepsPassedInInterval / (float)resolution;
           _currentValue = stepsPassedAsFraction < value;
         },
-        std::nullopt,
-        true
+        std::nullopt
       ))
-    { }
+    {
+      if (interval % resolution != 0) {
+        throw std::invalid_argument("Interval must be a multiple of resolution.");
+      }
+    }
 
     bool read() {
       _timer.run();
