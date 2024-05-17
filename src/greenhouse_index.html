@@ -1,0 +1,262 @@
+<html>
+  <head>
+    <title>Greenhouse</title>
+    <style>
+      .pvl {
+        border-radius: 1em;
+        padding: 1em;
+        background-color: #ddd;    
+      }
+
+      .reactive.updated {
+        transition-property: color, background-color;
+        transition-duration: 0.5s;
+        color: tomato;
+        background-color: rgba(255, 200, 80, 0.5);
+      }
+
+      .reactive {
+        transition-property: color, background-color;
+        transition-duration: 3s;
+      }
+    </style>
+
+    <script>
+      const ws = new WebSocket(`${window.location.protocol == 'https:' ? 'wss' : 'ws'}://${window.location.host}/ws`);
+
+      function updateElementState(el, value, flash = true) {
+        let previousValue;
+        if (el.nodeType == 'input' || el.nodeType == 'textarea') {
+          if (el.attr('type') == 'checkbox' || el.attr('type') == 'radio') {
+            previousValue = el.checked;
+            el.checked = value;
+          } else {
+            previousValue = el.value;
+            el.value = value;
+          }
+        } else {
+          previousVlaue = el.innerText
+          el.innerText = value;
+        }
+
+        if (flash && previousValue != value) {
+          el.classList.add('updated');
+          setTimeout(() => { el.classList.remove('updated'); }, 500);
+        }
+      }
+
+      function updateLocalState(key, value, flash = true) {
+        const el = document.querySelector(`#${key}`);
+        if (el) {
+          updateElementState(key, value, flash);
+        } else {
+          const els = document.querySelectorAll(`.${key}`);
+          if (els.length) {
+            for (const el of els) {
+              updateElementState(el, value, flash);
+            }
+          }
+        }
+      }
+
+      window.on('load', () => {
+        fetch('/all-state')
+          .then((response) => {
+            const state = JSON.parse(response.body);
+            for (const key in state) {
+              updateLocalState(key, state[key], false);
+            }
+          });
+        
+        ws.addEventListener('open', () => {
+          window.addEventListener('input', (event) => {
+            const el = event.target;
+            ws.send(JSON.stringify({
+              type: 'updateState',
+              key: el.id,
+              value: (el.attr('type') == 'checkbox' || el.attr('type') == 'radio')
+                ? el.checked
+                : el.value
+            }));
+          });
+        });
+
+        ws.addEventListener('message', (event) => {
+          const data = JSON.parse(event.data);
+          if (typeof data != 'array') {
+            data = [data];
+          }
+          for (const datum of data) {
+            switch (datum.type) {
+              case 'stateUpdated':
+                updateLocalState(data.key, data.value, true);
+                break;
+              default:
+            }
+          }
+        })
+      });
+    </script>
+  </head>
+  <body>
+    <h1>Greenhouse</h1>
+
+    <section>
+      <h2>Shelf</h2>
+
+      <div class="pvl">
+        <div class="pv">
+          <div class="p">Temp</div>
+          <div class="v"><span id="shelf-temp" class="reactive"></span><span class="temp-unit reactive"></span></div>
+        </div>
+        <div class="pv">
+          <div class="p">Hum</div>
+          <div class="v"><span id="shelf-hum" class="reactive"></span>% RH</div>
+        </div>
+        <div class="pv">
+          <div class="p">Light</div>
+          <span classs="v"><span id="shelf-light" class="reactive"></span>lux</span>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <h2>Ambient</h2>
+
+      <div class="pvl">
+        <div class="pv">
+          <div class="p">Ground temp</div>
+          <div class="v"><span id="ground-temp" class="reactive"></span><span class="temp-unit reactive"></span></div>
+        </div>
+        <div class="pv">
+          <div class="p">Ceil temp</div>
+          <div class="v"><span id="ceil-temp" class="reactive"></span><span class="temp-unit reactive"></span></div>
+        </div>
+        <div class="pv">
+          <div class="p">Yuzu temp</div>
+          <div class="v"><span id="yuzu-temp" class="reactive"></span><span class="temp-unit reactive"></span></div>
+        </div>
+        <div class="pv">
+          <div class="p">Fan</div>
+          <div id="fan-status" class="v reactive"></div>
+        </div>
+        <div class="pv"></div>
+          <div class="p">Fan control</div>
+          <div class="v">
+            <div class="vr">
+              <input id="fan-setpoint" class="reactive" type="number" size="5"/><span class="temp-unit reactive"></span>
+              ±<input id="fan-hysteresis" class="reactive" type="number" size="2"/><span class="temp-unit reactive"></span>
+            </div>
+            <div class="vr">
+              (on at <span id="fan-on-temp" class="reactive"></span><span class="temp-unit reactive"></span>,
+              off at <span id="fan-off-temp" class="reactive"></span><span class="temp-unit reactive"></span>)
+            </div>
+          </div>
+        </div>
+        <div class="pv">
+          <div class="p">Heater</div>
+          <div id="heater-status" class="v reactive"></div>
+        </div>
+        <div class="pv">
+          <div class="p">Heater control</div>
+          <div class="v">
+            <div class="vr">
+              <input id="heater-setpoint" class="reactive" type="number" size="5"/><span class="temp-unit reactive"></span>
+              ±<input id="heater-hysteresis" class="reactive" type="number" size="2"/><span class="temp-unit reactive"></span>
+            </span>
+            <div class="vr">
+              (on at <span id="heater-on-temp" class="reactive"></span><span class="temp-unit reactive"></span>, off at <span id="heater-off-temp" class="reactive"></span><span class="temp-unit reactive"></span>)
+            </span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <h2>Envelope</h2>
+
+      <div class="pvl">
+        <div class="pv">
+          <div class="p">West door</div>
+          <div id="west-door-status" class="v reactive"></div>
+        </div>
+        <div class="pv">
+          <div class="p">East door</div>
+          <div id="east-door-status" class="v reactive"></div>
+        </div>
+        <div class="pv">
+          <div class="p">Door alarms</div>
+          <div class="v">
+            <div class="vr">close alarm at <input id="door-alarm-close" class="reactive" type="number" size="5"/><span class="temp-unit reactive"></span></div>
+            <div class="vr">open alarm at <input id="door-alarm-open" class="reactive" type="number" size="5"/><span class="temp-unit reactive"></span></div>
+          </div>
+        </div>
+        <div class="pv">
+          <div class="p">Door alarm type</div>
+          <div class="v">
+            <div class="vr"><label><input id="door-alarm-noise" class="reactive" type="checkbox" /> make a noise</label></div>
+            <div class="vr">send message to <input id="door-alarm-phone" class="reactive" type="tel" /></div>
+          </div>
+        </div>
+        <div class="pv">
+          <div class="p">Roof vents</div>
+          <div id="roof-vents-status" class="v reactive"></div>
+        </div>
+        <div class="pv">
+          <div class="p">Roof vents control</div>
+          <div class="v">
+            <div class="vr">
+              <input id="roof-vents-setpoint" class="reactive" type="number" size="5"/><span class="temp-unit reactive"></span>
+              ±<input id="roof-vents-hysteresis" class="reactive" type="number" size="2"/><span class="temp-unit reactive"></span>
+            </div>
+            <div class="vr">
+              (on at <span id="roof-vents-on-temp" class="reactive"></span><span class="temp-unit reactive"></span>,
+              off at <span id="roof-vents-off-temp" class="reactive"></span><span class="temp-unit reactive"></span>)
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <h2>Bench</h2>
+
+      <div class="pvl">
+        <div class="pv">
+          <div class="p">Mat 1</div>
+          <div id="mat-1-status" class="v reactive"></div>
+        </div>
+        <div class="pv">
+          <div class="p">Mat 1 control</div>
+          <div class="v">
+            <div class="vr">
+              <input id="mat-1-setpoint" class="reactive" type="number" size="5"/><span class="temp-unit reactive"></span>
+              ±<input id="mat-1-hysteresis" class="reactive" type="number" size="2"/><span class="temp-unit reactive"></span>
+            </div>
+            <div class="vr">
+              (on at <span id="mat-1-on-temp" class="reactive"></span><span class="temp-unit reactive"></span>,
+              off at <span id="mat-1-off-temp" class="reactive"></span><span class="temp-unit reactive"></span>)
+            </span>
+          </div>
+        </div>
+        <div class="pv">
+          <div class="p">Mat 2</div>
+          <div id="mat-2-status" class="v reactive"></div>
+        </div>
+        <div class="pv">
+          <div class="p">Mat 2 control</div>
+          <div class="v">
+            <div class="vr">
+              <input id="mat-2-setpoint" class="reactive" type="number" size="5"/><span class="temp-unit reactive"></span>
+              ±<input id="mat-2-hysteresis" class="reactive" type="number" size="2"/><span class="temp-unit reactive"></span>
+            </div>
+            <div class="vr">
+              (on at <span id="mat-2-on-temp" class="reactive"></span><span class="temp-unit reactive"></span>,
+              off at <span id="mat-2-off-temp" class="reactive"></span><span class="temp-unit reactive"></span>)
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+  </body>
+</html>
