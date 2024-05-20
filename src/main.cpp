@@ -14,14 +14,14 @@
 #include <input/LogicalProcesses.h>
 #include <output/Output.h>
 #include <output/OutputFactories.h>
-#include <output/TwilioMessageOutput.h>
+#include <notifier/TwilioMessageNotifier.h>
 #include <Range.h>
 #include <Runnable.h>
 #include <StateMachine.h>
 #include <Timer.h>
 
 #define SPI_CIPO_PIN 0
-#define SPI_PICO_PIN 0
+#define SPI_COPI_PIN 0
 #define I2C_SCL_PIN 16
 #define I2C_SDA_PIN 17
 #define SHT21_DATA_PIN 0

@@ -24,7 +24,7 @@
     <script>
       const ws = new WebSocket(`${window.location.protocol == 'https:' ? 'wss' : 'ws'}://${window.location.host}/ws`);
 
-      function updateElementState(el, value, flash = true) {
+      function updateStateElement(el, value, flash = true) {
         let previousValue;
         if (el.nodeType == 'input' || el.nodeType == 'textarea') {
           if (el.attr('type') == 'checkbox' || el.attr('type') == 'radio') {
@@ -45,16 +45,42 @@
         }
       }
 
-      function updateLocalState(key, value, flash = true) {
+      function updateLocalState(key, data, flash = true) {
+        // The data of a local state update message may be flat, e.g.,
+        //
+        //   { "temp": 31.5, "doorsOpen": true }
+        //
+        // Or it may be nested, e.g.,
+        //
+        //   { "oven": { "setpoint": 200, "hysteresis": 10 } }
+        //
+        // Naturally, you can't set the value of an input or the innerText of an element to an object,
+        // so that's not what the nested value is for.
+        // Instead, child keys are meant to be concatenated to their parent keys until a scalar value is found,
+        // and that value is assigned to the value or innerText of the element
+        // whose ID and/or class matches the full concatenated key.
+        // For example, the second example above might set the value or innerText of two matching selectors:
+        // * `#oven-control-setpoint` set to 200
+        // * `.oven-control-hysteresis` set to 10
+        if (typeof value == 'object') {
+          for (const childKey in value) {
+            const fullKey = key ? `${key}-${childKey}` : childKey;
+            updateLocalState(fullKey, value[childKey], flash);
+          }
+          return;
+        }
+
+        // Is there an element whose ID matches?
         const el = document.querySelector(`#${key}`);
         if (el) {
-          updateElementState(key, value, flash);
-        } else {
-          const els = document.querySelectorAll(`.${key}`);
-          if (els.length) {
-            for (const el of els) {
-              updateElementState(el, value, flash);
-            }
+          updateStateElement(el, value, flash);
+        }
+
+        // And are there any elements with a class that matches?
+        const els = document.querySelectorAll(`.${key}`);
+        if (els.length) {
+          for (const el of els) {
+            updateStateElement(el, value, flash);
           }
         }
       }
@@ -82,17 +108,12 @@
         });
 
         ws.addEventListener('message', (event) => {
-          const data = JSON.parse(event.data);
-          if (typeof data != 'array') {
-            data = [data];
-          }
-          for (const datum of data) {
-            switch (datum.type) {
-              case 'stateUpdated':
-                updateLocalState(data.key, data.value, true);
-                break;
-              default:
-            }
+          const message = JSON.parse(event.data);
+          switch (message.type) {
+            case 'stateUpdated':
+              updateLocalState('', message.data, true);
+              break;
+            default:
           }
         })
       });
@@ -144,12 +165,12 @@
           <div class="p">Fan control</div>
           <div class="v">
             <div class="vr">
-              <input id="fan-setpoint" class="reactive" type="number" size="5"/><span class="temp-unit reactive"></span>
-              ±<input id="fan-hysteresis" class="reactive" type="number" size="2"/><span class="temp-unit reactive"></span>
+              <input id="fan-control-setpoint" class="reactive" type="number" size="5"/><span class="temp-unit reactive"></span>
+              ±<input id="fan-control-hysteresis" class="reactive" type="number" size="2"/><span class="temp-unit reactive"></span>
             </div>
             <div class="vr">
-              (on at <span id="fan-on-temp" class="reactive"></span><span class="temp-unit reactive"></span>,
-              off at <span id="fan-off-temp" class="reactive"></span><span class="temp-unit reactive"></span>)
+              (on at <span id="fan-temp-min" class="reactive"></span><span class="temp-unit reactive"></span>,
+              off at <span id="fan-temp-max" class="reactive"></span><span class="temp-unit reactive"></span>)
             </div>
           </div>
         </div>
@@ -161,11 +182,11 @@
           <div class="p">Heater control</div>
           <div class="v">
             <div class="vr">
-              <input id="heater-setpoint" class="reactive" type="number" size="5"/><span class="temp-unit reactive"></span>
-              ±<input id="heater-hysteresis" class="reactive" type="number" size="2"/><span class="temp-unit reactive"></span>
+              <input id="heater-control-setpoint" class="reactive" type="number" size="5"/><span class="temp-unit reactive"></span>
+              ±<input id="heater-control-hysteresis" class="reactive" type="number" size="2"/><span class="temp-unit reactive"></span>
             </span>
             <div class="vr">
-              (on at <span id="heater-on-temp" class="reactive"></span><span class="temp-unit reactive"></span>, off at <span id="heater-off-temp" class="reactive"></span><span class="temp-unit reactive"></span>)
+              (on at <span id="heater-temp-min" class="reactive"></span><span class="temp-unit reactive"></span>, off at <span id="heater-temp-max" class="reactive"></span><span class="temp-unit reactive"></span>)
             </span>
           </div>
         </div>
@@ -187,8 +208,8 @@
         <div class="pv">
           <div class="p">Door alarms</div>
           <div class="v">
-            <div class="vr">close alarm at <input id="door-alarm-close" class="reactive" type="number" size="5"/><span class="temp-unit reactive"></span></div>
-            <div class="vr">open alarm at <input id="door-alarm-open" class="reactive" type="number" size="5"/><span class="temp-unit reactive"></span></div>
+            <div class="vr">close alarm at <input id="door-alarm-control-min" class="reactive" type="number" size="5"/><span class="temp-unit reactive"></span></div>
+            <div class="vr">open alarm at <input id="door-alarm-control-max" class="reactive" type="number" size="5"/><span class="temp-unit reactive"></span></div>
           </div>
         </div>
         <div class="pv">
@@ -206,12 +227,12 @@
           <div class="p">Roof vents control</div>
           <div class="v">
             <div class="vr">
-              <input id="roof-vents-setpoint" class="reactive" type="number" size="5"/><span class="temp-unit reactive"></span>
-              ±<input id="roof-vents-hysteresis" class="reactive" type="number" size="2"/><span class="temp-unit reactive"></span>
+              <input id="roof-vents-control-setpoint" class="reactive" type="number" size="5"/><span class="temp-unit reactive"></span>
+              ±<input id="roof-vents-control-hysteresis" class="reactive" type="number" size="2"/><span class="temp-unit reactive"></span>
             </div>
             <div class="vr">
-              (on at <span id="roof-vents-on-temp" class="reactive"></span><span class="temp-unit reactive"></span>,
-              off at <span id="roof-vents-off-temp" class="reactive"></span><span class="temp-unit reactive"></span>)
+              (on at <span id="roof-vents-temp-min" class="reactive"></span><span class="temp-unit reactive"></span>,
+              off at <span id="roof-vents-temp-max" class="reactive"></span><span class="temp-unit reactive"></span>)
             </div>
           </div>
         </div>
@@ -230,12 +251,12 @@
           <div class="p">Mat 1 control</div>
           <div class="v">
             <div class="vr">
-              <input id="mat-1-setpoint" class="reactive" type="number" size="5"/><span class="temp-unit reactive"></span>
-              ±<input id="mat-1-hysteresis" class="reactive" type="number" size="2"/><span class="temp-unit reactive"></span>
+              <input id="mat-1-control-setpoint" class="reactive" type="number" size="5"/><span class="temp-unit reactive"></span>
+              ±<input id="mat-1-control-hysteresis" class="reactive" type="number" size="2"/><span class="temp-unit reactive"></span>
             </div>
             <div class="vr">
-              (on at <span id="mat-1-on-temp" class="reactive"></span><span class="temp-unit reactive"></span>,
-              off at <span id="mat-1-off-temp" class="reactive"></span><span class="temp-unit reactive"></span>)
+              (on at <span id="mat-1-temp-min" class="reactive"></span><span class="temp-unit reactive"></span>,
+              off at <span id="mat-1-temp-max" class="reactive"></span><span class="temp-unit reactive"></span>)
             </span>
           </div>
         </div>
@@ -247,12 +268,12 @@
           <div class="p">Mat 2 control</div>
           <div class="v">
             <div class="vr">
-              <input id="mat-2-setpoint" class="reactive" type="number" size="5"/><span class="temp-unit reactive"></span>
-              ±<input id="mat-2-hysteresis" class="reactive" type="number" size="2"/><span class="temp-unit reactive"></span>
+              <input id="mat-2-control-setpoint" class="reactive" type="number" size="5"/><span class="temp-unit reactive"></span>
+              ±<input id="mat-2-control-hysteresis" class="reactive" type="number" size="2"/><span class="temp-unit reactive"></span>
             </div>
             <div class="vr">
-              (on at <span id="mat-2-on-temp" class="reactive"></span><span class="temp-unit reactive"></span>,
-              off at <span id="mat-2-off-temp" class="reactive"></span><span class="temp-unit reactive"></span>)
+              (on at <span id="mat-2-temp-min" class="reactive"></span><span class="temp-unit reactive"></span>,
+              off at <span id="mat-2-temp-max" class="reactive"></span><span class="temp-unit reactive"></span>)
             </div>
           </div>
         </div>

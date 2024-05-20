@@ -129,4 +129,28 @@ class TwoPointCalibrationMultiProcess : public TranslatingMultiProcess<TKey, TVa
     { }
 };
 
+enum TempUnit {
+  celsius,
+  fahrenheit,
+  kelvin,
+};
+
+// Assumes a value in degrees Celsius, translating it to the proper temperature unit.
+class TemperatureTranslatingProcess : public TranslatingProcess<float, float> {
+  TemperatureTranslatingProcess(Input<float>* wrappedInput, Input<TempUnit>* tempUnitInput)
+  : TranslatingProcess(
+    wrappedInput,
+    [tempUnitInput](float value) {
+      switch (tempUnitInput->read()) {
+        case TempUnit::celsius:
+          return value;
+        case TempUnit::fahrenheit:
+          return value * (9.0f / 5.0f + 32);
+        case TempUnit::kelvin:
+          return value + 273.15f;
+      }
+    }
+  )
+};
+
 #endif
