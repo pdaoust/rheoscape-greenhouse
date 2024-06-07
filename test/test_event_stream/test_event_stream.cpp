@@ -6,6 +6,35 @@
 #include <Timer.h>
 #include <event_stream/EventStreamProcesses.h>
 
+void test_honours_receive_last_event_flag() {
+  DumbEventStream<int> eventStream;
+  eventStream.emit(3);
+  bool firstSubscriberTriggered = false;
+  int receivedValue = 0;
+  eventStream.registerSubscriber([&firstSubscriberTriggered, &receivedValue](Event<int> e) {
+    firstSubscriberTriggered = true;
+    receivedValue = e.value;
+  }, false);
+  TEST_ASSERT_FALSE(firstSubscriberTriggered);
+  TEST_ASSERT_FALSE(receivedValue == 3);
+  bool secondSubscriberTriggered = false;
+  eventStream.registerSubscriber([&secondSubscriberTriggered, &receivedValue](Event<int> e) {
+    secondSubscriberTriggered = true;
+    receivedValue = e.value;
+  }, true);
+  TEST_ASSERT_TRUE(secondSubscriberTriggered);
+  TEST_ASSERT_EQUAL(3, receivedValue);
+}
+
+void test_can_get_last_event() {
+  DumbEventStream<int> eventStream;
+  std::optional<Event<int>> noEvent = eventStream.getLastEvent();
+  TEST_ASSERT_FALSE(noEvent.has_value());
+  eventStream.emit(3);
+  std::optional<Event<int>> someEvent = eventStream.getLastEvent();
+  TEST_ASSERT_TRUE(someEvent.has_value());
+}
+
 void test_input_to_event_stream() {
   StateInput input(0);
   InputToEventStream inputToEventStream(&input);
@@ -307,6 +336,8 @@ void test_beacon_with_optional_value_input() {
 int main(int argc, char **argv) {
   Timekeeper::setSource(TimekeeperSource::simTime);
   UNITY_BEGIN();
+  RUN_TEST(test_honours_receive_last_event_flag);
+  RUN_TEST(test_can_get_last_event);
   RUN_TEST(test_input_to_event_stream);
   RUN_TEST(test_event_stream_filter);
   RUN_TEST(test_event_stream_translator);

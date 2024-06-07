@@ -3,47 +3,46 @@
 
 #include <input/Input.h>
 #include <input/TranslatingProcesses.h>
+#include <input/GpioInputs.h>
 #include <Range.h>
+#include <output/OutputFactories.h>
 
 // Just cargo culting a singleton pattern from this SO answer:
 // https://stackoverflow.com/a/1008289
-class GreenhouseState {
-  private:
-    GreenhouseState();
-    GreenhouseState(GreenhouseState const&);
-    void operator=(GreenhouseState const&);
-  
+struct GreenhouseState {
   public:
     StateInput<TempUnit>* temp_unit;
-    EventStream<float>* shelf_temp;
-    EventStream<float>* shelf_hum;
-    EventStream<float>* shelf_light;
-    EventStream<float>* ground_temp;
-    EventStream<float>* ceil_temp;
-    EventStream<float>* yuzu_temp;
-    EventStream<bool>* fan_status;
-    StateInput<SetpointAndHysteresis<float>>* fan_control;
-    EventStream<bool>* heater_status;
-    StateInput<SetpointAndHysteresis<float>>* heater_control;
-    EventStream<bool>* west_door_status;
-    EventStream<bool>* east_door_status;
+    InputToEventStream<std::optional<float>>* shelf_temp;
+    StateInput<TwoPointCalibration<float>>* shelf_temp_calibration;
+    InputToEventStream<std::optional<float>>* shelf_hum;
+    InputToEventStream<float>* shelf_light;
+    InputToEventStream<std::optional<float>>* ground_temp;
+    StateInput<TwoPointCalibration<float>>* ground_temp_calibration;
+    InputToEventStream<std::optional<float>>* ceiling_temp;
+    StateInput<TwoPointCalibration<float>>* ceiling_temp_calibration;
+    InputToEventStream<std::optional<float>>* yuzu_temp;
+    StateInput<TwoPointCalibration<float>>* yuzu_temp_calibration;
+    InputToEventStream<bool>* fan_status;
+    StateInput<SetpointAndHysteresis<float>>* fan;
+    InputToEventStream<bool>* heater_status;
+    StateInput<SetpointAndHysteresis<float>>* heater;
+    InputToEventStream<DoorState>* west_door_status;
+    InputToEventStream<DoorState>* east_door_status;
+    StateInput<Range<float>>* extreme_temp_alarm_control;
     StateInput<Range<float>>* door_alarm_control;
-    StateInput<bool>* door_alarm_noise;
-    StateInput<std::string>* door_alarm_phone;
-    EventStream<bool>* roof_vents_status;
-    StateInput<SetpointAndHysteresis<float>>* roof_vents_control;
-    EventStream<bool>* mat_1_status;
-    StateInput<SetpointAndHysteresis<float>>* mat_1_control;
-    EventStream<bool>* mat_2_status;
-    StateInput<SetpointAndHysteresis<float>>* mat_2_control;
-
-  static GreenhouseState& getInstance() {
-    static GreenhouseState _instance;
-    return _instance;
-  }
-
-  GreenhouseState(GreenhouseState const&) = delete;
-  void operator=(GreenhouseState const&) = delete;
+    StateInput<bool>* alarm_noise;
+    StateInput<std::string>* alarm_phone;
+    InputToEventStream<CoverAction>* roof_vents_status;
+    InputToEventStream<DoorState>* roof_vents_sensor_status;
+    StateInput<SetpointAndHysteresis<float>>* roof_vents;
+    InputToEventStream<bool>* mat_1_status;
+    InputToEventStream<std::optional<float>>* mat_1_temp;
+    StateInput<TwoPointCalibration<float>>* mat_1_temp_calibration;
+    StateInput<SetpointAndHysteresis<float>>* mat_1;
+    InputToEventStream<bool>* mat_2_status;
+    InputToEventStream<std::optional<float>>* mat_2_temp;
+    StateInput<TwoPointCalibration<float>>* mat_2_temp_calibration;
+    StateInput<SetpointAndHysteresis<float>>* mat_2;
 };
 
 #endif

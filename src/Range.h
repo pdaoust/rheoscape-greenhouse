@@ -7,10 +7,6 @@ struct Range {
   T max;
 
   Range(T min, T max) : min(min), max(max) { }
-
-  operator SetpointAndHysteresis() const {
-    return SetpointAndHysteresis(min + (max - min) / 2, (max - min) / 2);
-  }
 };
 
 template <typename T>
@@ -21,8 +17,22 @@ struct SetpointAndHysteresis {
 
   SetpointAndHysteresis(T setpoint, T hysteresis) : setpoint(setpoint), hysteresis(hysteresis) { }
 
-  operator Range() const {
-    return Range(setpoint - hysteresis, setpoint + hysteresis);
+  SetpointAndHysteresis(Range<T> range) 
+  :
+    setpoint(range.min + (range.max - range.min) / 2),
+    hysteresis((range.max - range.min) / 2)
+  { }
+
+  operator Range<T>() const {
+    return Range<T>(min(), max());
+  }
+
+  T min() const {
+    return setpoint - hysteresis;
+  }
+
+  T max() const {
+    return setpoint + hysteresis;
   }
 };
 

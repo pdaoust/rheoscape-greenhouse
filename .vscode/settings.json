@@ -62,7 +62,8 @@
         "chrono": "cpp",
         "ratio": "cpp",
         "span": "cpp",
-        "format": "cpp"
+        "format": "cpp",
+        "bitmapprocesses.h": "c"
     },
     "C_Cpp.default.compilerPath": "/usr/bin/gcc"
 }

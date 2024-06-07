@@ -192,9 +192,9 @@ void test_one_shot_timer_cannot_run_immediately() {
 void test_throttle_throttles() {
   Timekeeper::setSource(TimekeeperSource::simTime);
   uint8_t didRunTimes = 0;
-  Throttle throttle(10, [&didRunTimes]() { didRunTimes ++; });
+  Throttle<int> throttle(10, [&didRunTimes]() { didRunTimes ++; return didRunTimes; });
   for (uint8_t i = 1; i < 10; i ++) {
-    TEST_ASSERT_TRUE(throttle.tryRun());
+    TEST_ASSERT_TRUE(throttle.tryRun().value() == i);
     TEST_ASSERT_EQUAL(i, didRunTimes);
     for (uint8_t j = 0; j < 9; j ++) {
       Timekeeper::tick();
@@ -208,7 +208,7 @@ void test_throttle_throttles() {
 void test_throttle_can_clear() {
   Timekeeper::setSource(TimekeeperSource::simTime);
   uint8_t didRunTimes = 0;
-  Throttle throttle(10, [&didRunTimes]() { didRunTimes ++; });
+  BasicThrottle throttle(10, [&didRunTimes]() { didRunTimes ++; });
   throttle.tryRun();
   TEST_ASSERT_EQUAL(1, didRunTimes);
   throttle.tryRun();
@@ -216,6 +216,17 @@ void test_throttle_can_clear() {
   throttle.clear();
   throttle.tryRun();
   TEST_ASSERT_EQUAL(2, didRunTimes);
+}
+
+void test_basic_throttle_returns_true_if_run_nullopt_if_not_run() {
+  Timekeeper::setSource(TimekeeperSource::simTime);
+  BasicThrottle throttle(10, []() { });
+  Timekeeper::setNowSim(0);
+  TEST_ASSERT_TRUE(throttle.tryRun().value());
+  Timekeeper::setNowSim(1);
+  TEST_ASSERT_FALSE(throttle.tryRun().has_value());
+  Timekeeper::setNowSim(10);
+  TEST_ASSERT_TRUE(throttle.tryRun().value());
 }
 
 int main(int argc, char **argv) {
@@ -230,5 +241,6 @@ int main(int argc, char **argv) {
   RUN_TEST(test_timer_can_run_immediately);
   RUN_TEST(test_throttle_throttles);
   RUN_TEST(test_throttle_can_clear);
+  RUN_TEST(test_basic_throttle_returns_true_if_run_nullopt_if_not_run);
   UNITY_END();
 }

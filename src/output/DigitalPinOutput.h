@@ -3,6 +3,7 @@
 
 #ifdef PLATFORM_ARDUINO
 
+#include <Runnable.h>
 #include <input/Input.h>
 #include <output/Output.h>
 

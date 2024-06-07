@@ -11,7 +11,7 @@
 class Max6675 : public Input<std::optional<float>> {
   private:
     MAX6675 _sensor;
-    Throttle _throttle;
+    BasicThrottle _throttle;
     std::optional<float> _lastReading;
   
   public:

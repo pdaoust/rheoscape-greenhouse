@@ -20,9 +20,11 @@ template <typename T>
 class EventStream {
   private:
     std::vector<std::function<void(Event<T>)>> _subscribers;
+    std::optional<Event<T>> _lastEvent;
 
   protected:
     void _emit(Event<T> event) {
+      _lastEvent = event;
       for (auto receive : _subscribers) {
         receive(event);
       }
@@ -36,8 +38,15 @@ class EventStream {
     }
 
   public:
-    void registerSubscriber(std::function<void(Event<T>)> subscriber) {
+    void registerSubscriber(std::function<void(Event<T>)> subscriber, bool receiveLastEvent = false) {
       _subscribers.push_back(subscriber);
+      if (receiveLastEvent && _lastEvent.has_value()) {
+        subscriber(_lastEvent.value());
+      }
+    }
+
+    std::optional<Event<T>> getLastEvent() const {
+      return _lastEvent;
     }
 };
 

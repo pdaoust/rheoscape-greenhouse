@@ -1,258 +1,293 @@
+#include <functional>
+#include <memory>
 #include <optional>
 #include <sstream>
 
 #ifdef PLATFORM_ARDUINO
 #include <Arduino.h>
+#include <SPI.h>
+#include <Wire.h>
+#include <OneWire.h>
 
-#include <display/BitmapProcesses.h>
-#include <display/Displays.h>
-#include <event_stream/EventStream.h>
-#include <event_stream/FancyPushbutton.h>
-#include <input/CombiningProcesses.h>
-#include <input/ControlProcesses.h>
-#include <input/Input.h>
-#include <input/LogicalProcesses.h>
-#include <output/Output.h>
-#include <output/OutputFactories.h>
-#include <notifier/TwilioMessageNotifier.h>
 #include <Range.h>
 #include <Runnable.h>
-#include <StateMachine.h>
-#include <Timer.h>
+#include <input/Input.h>
+#include <input/Ds18b20.h>
+#include <input/Bme280.h>
+#include <input/Bh1750.h>
+#include <input/GpioInputs.h>
+#include <input/TranslatingProcesses.h>
+#include <input/CombiningProcesses.h>
+#include <input/ControlProcesses.h>
+#include <input/LogicalProcesses.h>
+#include <output/OutputFactories.h>
+#include <output/MotorDriver.h>
+#include <notifier/TwilioMessageNotifier.h>
+#include <event_stream/EventStreamProcesses.h>
+#include <helpers/string_format.h>
+#include <helpers/temperature.h>
 
-#define SPI_CIPO_PIN 0
-#define SPI_COPI_PIN 0
-#define I2C_SCL_PIN 16
-#define I2C_SDA_PIN 17
-#define SHT21_DATA_PIN 0
-#define SHT21_CLOCK_PIN 0
-#define SHT21_TEMP_CALIBRATION_OFFSET 0.0
-// FIXME: real value please.
-#define ONEWIRE_DATA_PIN 0
-#define DS18B20_HEATMAT_1_ADDRESS 0x0000000000000000
-#define DS18B20_HEATMAT_1_CALIBRATION_OFFSET 0.0
-#define DS18B20_HEATMAT_2_ADDRESS 0x0000000000000000
-#define DS18B20_HEATMAT_2_CALIBRATION_OFFSET 0.0
-#define DS18B20_GND_W_ADDRESS 0x0000000000000000
-#define DS18B20_GND_W_CALIBRATION_OFFSET 0.0
-#define DS18B20_CEIL_W_ADDRESS 0x0000000000000000
-#define DS18B20_CEIL_W_CALIBRATION_OFFSET 0.0
-#define DS18B20_GND_E_ADDRESS 0x0000000000000000
-#define DS18B20_GND_E_CALIBRATION_OFFSET 0.0
-#define DS18B20_CEIL_E_ADDRESS 0x0000000000000000
-#define DS18B20_CEIL_E_CALIBRATION_OFFSET 0.0
-// FIXME: real value please.
-#define DOOR_W_SENSOR_PIN 0
-// FIXME: real value please.
-#define DOOR_E_SENSOR_PIN 0
-// FIXME: real value please.
-#define VENTS_SENSOR_PIN 0
+#include <GreenhouseState.h>
+#include <webServer.h>
 
-const TwilioConfig twilioConfig{
-  "AC5c37778624f35d8c4f508e5fdab8dca0",
-  "f03924deb2ce3b47adcade52ac61ebca",
-  "+13158126320",
-  "+12504865323"
-};
-// Every ten minutes seems good.
-#define DOOR_ALARM_MESSAGE_SEND_EVERY 1000 * 60 * 10
+// This is -1 kelvin, an impossible reading.
+const float NO_READING_TEMP = -275.0f;
+const int ROOF_VENTS_OPEN_PIN = 0;
+const int ROOF_VENTS_CLOSE_PIN = 0;
+const int ROOF_VENTS_SENSOR_PIN = 0;
+const int ONE_WIRE_PIN = 0;
+const uint64_t MAT_1_THERM_ADDRESS = 0x0000000000000000;
+const int MAT_1_CONTROL_PIN = 0;
+const uint64_t MAT_2_THERM_ADDRESS = 0x0000000000000000;
+const int MAT_2_CONTROL_PIN = 0;
+const uint64_t YUZU_THERM_ADDRESS = 0x0000000000000000;
+const uint64_t CEILING_THERM_ADDRESS = 0x0000000000000000;
+const uint64_t GROUND_THERM_ADDRESS = 0x0000000000000000;
+const int FANS_CONTROL_PIN = 0;
+const int HEATER_CONTROL_PIN = 0;
+const unsigned long BH1750_SAMPLE_INTERVAL = 1000;
+const std::string MY_WIFI_AP_SSID = "logiehouse2";
+const std::string MY_WIFI_AP_KEY = "";
+const std::string TWILIO_ACCT_ID;
+const std::string TWILIO_AUTH_TOKEN;
+const std::string TWILIO_SENDER;
 
-#define HD44780_RS_PIN 17
-#define HD44780_EN_PIN 10
-#define HD44780_D1_PIN 11
-#define HD44780_D2_PIN 12
-#define HD44780_D3_PIN 13
-#define HD44780_D4_PIN 14
+StateInput tempDisplayUnits(TempUnit::celsius);
+TranslatingProcess<TempUnit, std::string> tempDisplayUnitsSymbol(&tempDisplayUnits, [](TempUnit value) { return displayUnit(value); });
 
-#define HEATMAT_1_RELAY_PIN 39
-#define HEATMAT_2_RELAY_PIN 40
-#define HEATER_RELAY_PIN 41
-#define FAN_RELAY_PIN 42
-#define FAN_CYCLE_TIME INDUCTIVE_LOAD_CYCLE_TIME
-// FIXME: real value please.
-#define WATER_RELAY_PIN 0
-// FIXME: real value please.
-#define ROOF_VENT_ACTUATOR_CLOSE_PIN 0
-// FIXME: real value please.
-#define ROOF_VENT_ACTUATOR_OPEN_PIN 0
-// A one-hour cycle is probably granular enough for roof vents.
-// Maybe it needs to be even coarser?
-#define ROOF_VENT_ACTUATION_TIME 1000 * 60 * 60
+SPIClass spi = SPI;
+TwoWire i2c = Wire;
+OneWire oneWire(ONE_WIRE_PIN);
 
-Runner runner(1);
-Ds18b20 oneWireTempSensors(
-  ONEWIRE_DATA_PIN,
-  Ds18b20::half_degree,
-  std::map<uint64_t, float>{
-    { DS18B20_HEATMAT_1_ADDRESS, DS18B20_HEATMAT_1_CALIBRATION_OFFSET },
-    { DS18B20_HEATMAT_2_ADDRESS, DS18B20_HEATMAT_2_CALIBRATION_OFFSET },
-    { DS18B20_GND_W_ADDRESS, DS18B20_GND_W_CALIBRATION_OFFSET },
-    { DS18B20_GND_E_ADDRESS, DS18B20_GND_E_CALIBRATION_OFFSET },
-    { DS18B20_CEIL_W_ADDRESS, DS18B20_CEIL_W_CALIBRATION_OFFSET },
-    { DS18B20_CEIL_E_ADDRESS, DS18B20_CEIL_E_CALIBRATION_OFFSET }
-  }
-);
+Ds18b20 dallasTherms(&oneWire);
 
-// Heat mats setup
-Input<float> heatmat1Sensor = oneWireTempSensors.getInputForChannel(DS18B20_HEATMAT_1_ADDRESS);
-auto heatmat1RangeInput = makeRangeConstantInput<float>(24.0f, 26.0f);
-Input<ProcessControlDirection> heatmat1BangBang = BangBangProcess<float>(heatmat1Sensor, heatmat1RangeInput);
-Input<bool> heatmat1RelayInput = DirectionToBooleanProcess(heatmat1BangBang, true);
-Output heatmat1Controller = makeRelay(
-  HEATMAT_1_RELAY_PIN,
-  LOW,
-  MECHANICAL_RELAY_CYCLE_TIME,
-  heatmat1RelayInput,
-  runner
-);
-Input<float> heatmat2Sensor = oneWireTempSensors.getInputForChannel(DS18B20_HEATMAT_2_ADDRESS);
-auto heatmat2RangeInput = ConstantInput<Range<std::optional<float>>>(Range<std::optional<float>>{ 24.0, 26.0 });
-Input<ProcessControlDirection> heatmat2BangBang = BangBangProcess<float>(heatmat2Sensor, heatmat2RangeInput);
-Input<bool> heatmat2RelayInput = DirectionToBooleanProcess(heatmat2BangBang, true);
-Output heatmat2Controller = makeRelay(
-  HEATMAT_2_RELAY_PIN,
-  LOW,
-  MECHANICAL_RELAY_CYCLE_TIME,
-  heatmat2RelayInput,
-  runner
-);
+auto mat1MaybeTemp = dallasTherms.getInputForChannel(MAT_1_THERM_ADDRESS);
+StateInput mat1TempCalibration(TwoPointCalibration<float>::waterReference());
+TwoPointCalibrationOptionalProcess<float> mat1MaybeTempCalibrated(&mat1MaybeTemp, &mat1TempCalibration);
+OptionalPinningProcess mat1Temp(&mat1MaybeTempCalibrated, NO_READING_TEMP);
+StateInput mat1TempSetting(SetpointAndHysteresis(20.0f, 1.0f));
+DirectionToBooleanProcess mat1Thermostat(new BangBangProcess<float>(&mat1Temp, &mat1TempSetting), true);
+DigitalPinOutput mat1Control(MAT_1_CONTROL_PIN, HIGH, &mat1Thermostat);
 
-// Next, the general condition of the greenhouse, which will get fed into various processes.
-Input<float> groundWestSensor = oneWireTempSensors.getInputForChannel(DS18B20_GND_W_ADDRESS);
-Input<float> groundEastSensor = oneWireTempSensors.getInputForChannel(DS18B20_GND_E_ADDRESS);
-Input<float> ceilingWestSensor = oneWireTempSensors.getInputForChannel(DS18B20_CEIL_W_ADDRESS);
-Input<float> ceilingEastSensor = oneWireTempSensors.getInputForChannel(DS18B20_CEIL_E_ADDRESS);
-Sht21 greenhouseTempHum(SHT21_DATA_PIN, SHT21_CLOCK_PIN, SHT21_TEMP_CALIBRATION_OFFSET);
-Input<float> greenhouseTemp = greenhouseTempHum.getInputForChannel(Sht21Channel::tempC);
-Input<float> greenhouseHum = greenhouseTempHum.getInputForChannel(Sht21Channel::humidity);
-std::vector<Input<float>> greenhouseAmbientTemperatureInputs{
-  groundWestSensor,
-  groundEastSensor,
-  ceilingWestSensor,
-  ceilingEastSensor,
-  greenhouseTemp
-};
-AggregatingProcess<float> greenhouseAmbientTemperature(greenhouseAmbientTemperatureInputs);
+auto mat2MaybeTemp = dallasTherms.getInputForChannel(MAT_2_THERM_ADDRESS);
+StateInput mat2TempCalibration(TwoPointCalibration<float>::waterReference());
+TwoPointCalibrationOptionalProcess<float> mat2MaybeTempCalibrated(&mat2MaybeTemp, &mat2TempCalibration);
+OptionalPinningProcess mat2Temp(&mat2MaybeTempCalibrated, NO_READING_TEMP);
+StateInput mat2TempSetting(SetpointAndHysteresis(20.0f, 1.0f));
+DirectionToBooleanProcess mat2Thermostat(new BangBangProcess<float>(&mat2Temp, &mat2TempSetting), true);
+DigitalPinOutput mat2Control(MAT_2_CONTROL_PIN, HIGH, &mat2Thermostat);
 
-// First, the window vents.
-Input<float> maxGreenhouseTemp = greenhouseAmbientTemperature.getInputForChannel(AggregationType::maximum);
-auto ventsAndDoorsRangeInput = makeRangeConstantInput<float>(15.0, 25.0);
-Input<ProcessControlDirection> ventsBangBang = BangBangProcess<float>(maxGreenhouseTemp, ventsAndDoorsRangeInput);
-// This is a cooling process, so up is false.
-Input<bool> ventCoverInput = DirectionToBooleanProcess(ventsBangBang, false);
-Output ventCover = makeCover(
-  ROOF_VENT_ACTUATOR_OPEN_PIN,
-  ROOF_VENT_ACTUATOR_CLOSE_PIN,
-  0,
-  HIGH,
-  ROOF_VENT_ACTUATION_TIME,
-  ventCoverInput,
-  runner
-);
+auto yuzuMaybeTemp = dallasTherms.getInputForChannel(YUZU_THERM_ADDRESS);
+StateInput yuzuTempCalibration(TwoPointCalibration<float>::waterReference());
+TwoPointCalibrationOptionalProcess<float> yuzuMaybeTempCalibrated(&yuzuMaybeTemp, &yuzuTempCalibration);
+OptionalPinningProcess yuzuTemp(&yuzuMaybeTempCalibrated, NO_READING_TEMP);
 
-// Next, the door alarm.
-// Pull up when open, so that closed is false.
-auto westDoorOpenSensor = DigitalPinInput(DOOR_W_SENSOR_PIN, INPUT_PULLUP);
-auto eastDoorOpenSensor = DigitalPinInput(DOOR_E_SENSOR_PIN, INPUT_PULLUP);
-auto eitherDoorOpenProcess = OrProcess(westDoorOpenSensor, eastDoorOpenSensor);
-Input<std::tuple<std::optional<bool>, std::optional<float>, std::optional<Range<std::optional<float>>>>> doorsDecisionMakingInput = Merging3Process<bool, float, Range<std::optional<float>>>(eitherDoorOpenProcess, maxGreenhouseTemp, ventsAndDoorsRangeInput);
-Input<std::string> doorAlarmMessageInput = TranslatingProcess<std::tuple<std::optional<bool>, std::optional<float>, std::optional<Range<std::optional<float>>>>, std::string>(
-  doorsDecisionMakingInput,
-  [](std::optional<std::tuple<std::optional<bool>, std::optional<float>, std::optional<Range<std::optional<float>>>>> value) {
-    if (!value.has_value()) {
-      return (std::optional<std::string>)std::nullopt;
+auto groundMaybeTemp = dallasTherms.getInputForChannel(GROUND_THERM_ADDRESS);
+StateInput groundTempCalibration(TwoPointCalibration<float>::waterReference());
+TwoPointCalibrationOptionalProcess<float> groundMaybeTempCalibrated(&groundMaybeTemp, &groundTempCalibration);
+OptionalPinningProcess groundTemp(&groundMaybeTempCalibrated, NO_READING_TEMP);
+
+auto ceilingMaybeTemp = dallasTherms.getInputForChannel(CEILING_THERM_ADDRESS);
+StateInput ceilingTempCalibration(TwoPointCalibration<float>::waterReference());
+TwoPointCalibrationOptionalProcess<float> ceilingMaybeTempCalibrated(&ceilingMaybeTemp, &ceilingTempCalibration);
+OptionalPinningProcess ceilingTemp(&ceilingMaybeTempCalibrated, NO_READING_TEMP);
+
+Bme280 shelfSensor(&i2c);
+auto shelfMaybeTemp = shelfSensor.getInputForChannel(Bme280Channel::tempC);
+StateInput shelfTempCalibration(TwoPointCalibration<float>::waterReference());
+TwoPointCalibrationOptionalProcess<float> shelfMaybeTempCalibrated(&shelfMaybeTemp, &shelfTempCalibration);
+OptionalPinningProcess shelfTemp(&shelfMaybeTemp, NO_READING_TEMP);
+auto shelfMaybeHum = shelfSensor.getInputForChannel(Bme280Channel::humidity);
+
+Bh1750 shelfLight(BH1750_SAMPLE_INTERVAL, Bh1750::BH1750_ADDRESS_LOW, &i2c);
+
+std::vector<Input<float>*> environmentTemps = { &yuzuTemp, &ceilingTemp, &shelfTemp };
+AvgProcess environmentAvgTemp(&environmentTemps);
+MaxProcess environmentMaxTemp(&environmentTemps);
+MinProcess environmentMinTemp(&environmentTemps);
+Merging2Process environmentMinMaxTemps(&environmentMinTemp, &environmentMaxTemp);
+
+auto westDoorSensor = DoorSensor(0, INPUT_PULLDOWN);
+DoorSensor eastDoorSensor(0, INPUT_PULLDOWN);
+
+StateInput roofVentsTempSetting(SetpointAndHysteresis(25.0f, 5.0f));
+DirectionToBooleanProcess roofVentsThermostat(new BangBangProcess<float>(&environmentMaxTemp, &roofVentsTempSetting), true);
+// temp up = true = open
+TranslatingProcess<bool, CoverAction> roofVentsCoverControl(&roofVentsThermostat, [](bool value) { return value ? CoverAction::openCover : CoverAction::closeCover; });
+MotorDriver roofVentsControl = makeCover(ROOF_VENTS_OPEN_PIN, ROOF_VENTS_CLOSE_PIN, LOW, 1000, &roofVentsCoverControl);
+DoorSensor roofVentSensor(ROOF_VENTS_SENSOR_PIN, INPUT_PULLDOWN);
+
+StateInput fanTempSetting(SetpointAndHysteresis(25.0f, 2.0f));
+DirectionToBooleanProcess fanThermostat(new BangBangProcess<float>(&environmentAvgTemp, &fanTempSetting), true);
+DigitalPinOutput fanControl(FANS_CONTROL_PIN, HIGH, &fanThermostat);
+
+StateInput heaterTempSetting(SetpointAndHysteresis(20.0f, 5.0f));
+DirectionToBooleanProcess heaterThermostat(new BangBangProcess<float>(&environmentAvgTemp, &heaterTempSetting), true);
+DigitalPinOutput heaterControl(HEATER_CONTROL_PIN, HIGH, &heaterThermostat);
+
+// Any door... including the roof vents
+FunctionInput<std::tuple<bool, bool>> anyDoorState([]() {
+  DoorState westDoorState = westDoorSensor.read();
+  DoorState eastDoorState = westDoorSensor.read();
+  DoorState roofVentState = westDoorSensor.read();
+  return std::tuple(
+    westDoorState == DoorState::doorOpen
+    || eastDoorState == DoorState::doorOpen
+    || roofVentState == DoorState::doorOpen,
+    westDoorState == DoorState::doorClosed
+    || eastDoorState == DoorState::doorClosed
+    || roofVentState == DoorState::doorClosed
+  );
+});
+StateInput doorAlarmThresholds(Range(10.0f, 25.0f));
+StateInput dangerAlarmThresholds(Range(5.0f, 40.0f));
+StateInput alarmNoise(true);
+StateInput<std::string> alarmPhone("+12504865323");
+
+FunctionInput<std::optional<std::string>> doorAlarmThresholdMessageCreator(
+  []() {
+    Range<float> thresholds = doorAlarmThresholds.read();
+    float min = environmentMinTemp.read();
+    float max = environmentMaxTemp.read();
+    std::tuple<bool, bool> anyDoorStateValue = anyDoorState.read();
+    bool anyDoorIsOpen = std::get<0>(anyDoorStateValue);
+    bool anyDoorIsClosed = std::get<1>(anyDoorStateValue);
+    TempUnit tempUnit = tempDisplayUnits.read();
+    std::string symbol = tempDisplayUnitsSymbol.read();
+
+    if (min < thresholds.min && anyDoorIsOpen) {
+      return (std::optional<std::string>)string_format("The min measured temperature has dropped %.1f%s below %.1f%s and at least one door is open", convertTempFromC(thresholds.min - min, tempUnit), symbol, convertTempFromC(thresholds.min, tempUnit), symbol);
     }
-
-    auto combined = value.value();
-    // This can't actually be null.
-    // At least, not with the current codebase.
-    bool doorIsOpen = std::get<0>(combined).value();
-    // But this can.
-    auto temp = std::get<1>(combined);
-    // But if it does, we can't do anything with it.
-    if (!temp.has_value()) {
-      return (std::optional<std::string>)std::nullopt;
+    if (max > thresholds.max && anyDoorIsClosed) {
+      return (std::optional<std::string>)string_format("The max measured temperature has risen %.1f%s above %.1f%s and at least one door is closed", convertTempFromC(max - thresholds.max, tempUnit), symbol, convertTempFromC(thresholds.max, tempUnit), symbol);
     }
-    // This can't be null either.
-    auto range = std::get<2>(combined).value();
-    auto min = range.min;
-    auto max = range.max;
-
-    if (doorIsOpen && min.has_value() && temp.value() < min.value()) {
-      std::stringstream message;
-      message << "Greenhouse temperature is too cold (" << (min.value() - temp.value()) << " below " << min.value() << ") and at least one door is open. Close it up!";
-      return (std::optional<std::string>)message.str();
-    }
-
-    if (!doorIsOpen && max.has_value() && temp.value() > max.value()) {
-      std::stringstream message;
-      message << "Greenhouse temperature is too hot (" << (temp.value() - max.value()) << " above " << max.value() << ") and both doors are closed. Open them up!";
-      return (std::optional<std::string>)message.str();
-    }
-
     return (std::optional<std::string>)std::nullopt;
   }
 );
-Output doorAlarmMessageSender = TwilioMessageOutput(
-  doorAlarmMessageInput,
-  DOOR_ALARM_MESSAGE_SEND_EVERY,
-  twilioConfig,
-  runner
+Beacon doorAlarmMessageEmitter(&doorAlarmThresholdMessageCreator, 1000 * 60 * 5);
+
+FunctionInput<std::optional<std::string>> dangerAlarmThresholdMessageCreator(
+  []() {
+    Range<float> thresholds = dangerAlarmThresholds.read();
+    float min = environmentMinTemp.read();
+    float max = environmentMaxTemp.read();
+    TempUnit tempUnit = tempDisplayUnits.read();
+    std::string symbol = tempDisplayUnitsSymbol.read();
+
+    if (min < thresholds.min) {
+      return (std::optional<std::string>)string_format("DANGER!!! The min measured temperature has dropped %.1f%s below %.1f%s!", convertTempFromC(thresholds.min - min, tempUnit), symbol, convertTempFromC(thresholds.min, tempUnit), symbol);
+    }
+    if (max > thresholds.max) {
+      return (std::optional<std::string>)string_format("DANGER!!! The max measured temperature has risen %.1f%s above %.1f%s!", convertTempFromC(max - thresholds.max, tempUnit), symbol, convertTempFromC(thresholds.max, tempUnit), symbol);
+    }
+    return (std::optional<std::string>)std::nullopt;
+  }
 );
+Beacon dangerAlarmMessageEmitter(&dangerAlarmThresholdMessageCreator, 1000 * 60 * 5);
 
-// Next, the fans for when the vents and doors ain't enough.
-// We'll put in a bit of overlap with the vents and doors --
-// they'll kick in at 30 degrees and keep working until the temp drops down to 20 again.
-auto fanRangeInput = makeRangeConstantInput<float>(20.0, 30.0);
-Input<ProcessControlDirection> fanBangBang = BangBangProcess<float>(maxGreenhouseTemp, fanRangeInput);
-Input<bool> fanRelayInput = DirectionToBooleanProcess(fanBangBang, false);
-Output fanRelay = makeRelay(
-  FAN_RELAY_PIN,
-  LOW,
-  FAN_CYCLE_TIME,
-  fanRelayInput,
-  runner
-);
+std::vector<EventStream<std::string>*> alarmMessageEmitters = {
+  &doorAlarmMessageEmitter,
+  &dangerAlarmMessageEmitter
+};
+EventStreamCombiner alarmMessagesCombined(alarmMessageEmitters);
 
-// Now, set up the UI.
-// First, turn the digital inputs into fancy pushbuttons.
+TranslatingProcess<std::string, TwilioConfig> twilioConfig(&alarmPhone, [](std::string phone) {
+  return TwilioConfig {
+    TWILIO_ACCT_ID,
+    TWILIO_AUTH_TOKEN,
+    TWILIO_SENDER,
+    phone
+  };
+});
 
-#define BUTTON_UP_PIN 4
-#define BUTTON_RIGHT_PIN 5
-#define BUTTON_DOWN_PIN 6
-#define BUTTON_LEFT_PIN 7
-#define BUTTON_CENTRE_PIN 8
-#define BUTTON_MODE INPUT_PULLUP
-#define BUTTON_BOUNCE 10
+TwilioMessageNotifier alarmNotifier(&alarmMessagesCombined, &twilioConfig);
 
-FancyPushbutton buttonUp = makeFancyPushbutton(BUTTON_UP_PIN, BUTTON_MODE, BUTTON_BOUNCE, runner);
-FancyPushbutton buttonDown = makeFancyPushbutton(BUTTON_DOWN_PIN, BUTTON_MODE, BUTTON_BOUNCE, runner);
-FancyPushbutton buttonLeft = makeFancyPushbutton(BUTTON_LEFT_PIN, BUTTON_MODE, BUTTON_BOUNCE, runner);
-FancyPushbutton buttonRight = makeFancyPushbutton(BUTTON_RIGHT_PIN, BUTTON_MODE, BUTTON_BOUNCE, runner);
-FancyPushbutton buttonCentre = makeFancyPushbutton(BUTTON_CENTRE_PIN, BUTTON_MODE, BUTTON_BOUNCE, runner);
+GreenhouseState ghState;
 
-// Now set up the display.
+GreenhouseState initGreenhouseState() {
+  GreenhouseState ghState;
+  ghState.temp_unit = &tempDisplayUnits;
+  ghState.shelf_temp = new InputToEventStream(new TemperatureTranslatingOptionalProcess(&shelfMaybeTempCalibrated, &tempDisplayUnits));
+  ghState.shelf_temp_calibration = &shelfTempCalibration;
+  ghState.shelf_hum = new InputToEventStream(&shelfMaybeHum);
+  ghState.shelf_light = new InputToEventStream(&shelfLight);
+  ghState.ground_temp = new InputToEventStream(new TemperatureTranslatingOptionalProcess(&groundMaybeTempCalibrated, &tempDisplayUnits));
+  ghState.ground_temp_calibration = &groundTempCalibration;
+  ghState.ceiling_temp = new InputToEventStream(new TemperatureTranslatingOptionalProcess(&ceilingMaybeTempCalibrated, &tempDisplayUnits));
+  ghState.ceiling_temp_calibration = &ceilingTempCalibration;
+  ghState.yuzu_temp = new InputToEventStream(new TemperatureTranslatingOptionalProcess(&yuzuMaybeTempCalibrated, &tempDisplayUnits));
+  ghState.yuzu_temp_calibration = &yuzuTempCalibration;
+  ghState.fan_status = new InputToEventStream(&fanThermostat);
+  ghState.fan = &fanTempSetting;
+  ghState.heater_status = new InputToEventStream(&heaterThermostat);
+  ghState.heater = &heaterTempSetting;
+  ghState.west_door_status = new InputToEventStream(&westDoorSensor);
+  ghState.east_door_status = new InputToEventStream(&eastDoorSensor);
+  ghState.extreme_temp_alarm_control = &dangerAlarmThresholds;
+  ghState.door_alarm_control = &doorAlarmThresholds;
+  ghState.alarm_noise = &alarmNoise;
+  ghState.alarm_phone = &alarmPhone;
+  ghState.roof_vents_status = new InputToEventStream(&roofVentsCoverControl);
+  ghState.roof_vents_sensor_status = new InputToEventStream(&roofVentSensor);
+  ghState.roof_vents = &roofVentsTempSetting;
+  ghState.mat_1_status = new InputToEventStream(&mat1Thermostat);
+  ghState.mat_1_temp = new InputToEventStream(&mat1MaybeTempCalibrated);
+  ghState.mat_1_temp_calibration = &mat1TempCalibration;
+  ghState.mat_1 = &mat1TempSetting;
+  ghState.mat_2_status = new InputToEventStream(&mat2Thermostat);
+  ghState.mat_2_temp = new InputToEventStream(&mat2MaybeTempCalibrated);
+  ghState.mat_2_temp_calibration = &mat2TempCalibration;
+  ghState.mat_2 = &mat2TempSetting;
+  return ghState;
+}
 
-CompositorProcess mainDisplay()
-CompositorProcess greenhouseTempSettings()
-CompositorProcess heatmatTempSettings()
-St7735_1_8_inches_landscape display()
+void registerRunnables(GreenhouseState* ghState) {
+  Runner::registerRunnable(&mat1Control);
+  Runner::registerRunnable(&mat2Control);
+  Runner::registerRunnable(&roofVentsControl);
+  Runner::registerRunnable(&fanControl);
+  Runner::registerRunnable(&heaterControl);
+  Runner::registerRunnable(&doorAlarmMessageEmitter);
+  Runner::registerRunnable(&dangerAlarmMessageEmitter);
+  Runner::registerRunnable(ghState->shelf_temp);
+  Runner::registerRunnable(ghState->shelf_hum);
+  Runner::registerRunnable(ghState->shelf_light);
+  Runner::registerRunnable(ghState->ground_temp);
+  Runner::registerRunnable(ghState->ceiling_temp);
+  Runner::registerRunnable(ghState->yuzu_temp);
+  Runner::registerRunnable(ghState->fan_status);
+  Runner::registerRunnable(ghState->heater_status);
+  Runner::registerRunnable(ghState->west_door_status);
+  Runner::registerRunnable(ghState->east_door_status);
+  Runner::registerRunnable(ghState->roof_vents_status);
+  Runner::registerRunnable(ghState->roof_vents_sensor_status);
+  Runner::registerRunnable(ghState->mat_1_status);
+  Runner::registerRunnable(ghState->mat_1_temp);
+  Runner::registerRunnable(ghState->mat_2_status);
+  Runner::registerRunnable(ghState->mat_2_temp);
+}
 
 void setup() {
   Serial.begin(115200);
   Serial.println("Getting started!");
-
-  Serial.println("Setting up input pins...");
-  pinMode(DOOR_W_SENSOR_PIN, INPUT_PULLUP);
-  pinMode(DOOR_E_SENSOR_PIN, INPUT_PULLUP);
-  pinMode(BUTTON_UP_PIN, INPUT_PULLUP);
-  pinMode(BUTTON_RIGHT_PIN, INPUT_PULLUP);
-  pinMode(BUTTON_DOWN_PIN, INPUT_PULLUP);
-  pinMode(BUTTON_LEFT_PIN, INPUT_PULLUP);
-  Serial.println("Buttons and reed switches set up.");
+  Serial.println("Connecting to WiFi...");
+  WiFi.begin(MY_WIFI_AP_SSID.c_str(), MY_WIFI_AP_KEY.c_str());
+  while (WiFi.status() != WL_CONNECTED) {
+    delay(1000);
+    Serial.print(".");
+  }
+  Serial.println("");
+  Serial.print("Connected to WiFi network with IP address: ");
+  Serial.println(WiFi.localIP());
+  Serial.println("Starting up web server...");
+  ghState = initGreenhouseState();
+  setupWebServer(&ghState);
+  Serial.println("Web server started!");
+  registerRunnables(&ghState);
 }
 
 void loop() {
+  Runner::run();
 }
 
 #else

@@ -14,18 +14,16 @@ class Runnable {
 
 class Runner {
   private:
-    inline static std::vector<std::weak_ptr<Runnable>> _runnables;
+    inline static std::vector<Runnable*> _runnables;
 
   public:
-    static void registerRunnable(std::weak_ptr<Runnable> runnable) {
+    static void registerRunnable(Runnable* runnable) {
       Runner::_runnables.push_back(runnable);
     }
 
     static void run() {
       for (int i = 0; i < _runnables.size(); i ++) {
-        if (!_runnables[i].expired()) {
-          _runnables[i].lock()->run();
-        }
+        _runnables[i]->run();
       }
     }
 };

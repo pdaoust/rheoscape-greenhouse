@@ -19,13 +19,13 @@ void test_make_relay() {
 }
 
 void test_make_cover() {
-  StateInput state(CoverState::closed);
+  StateInput state(CoverAction::closed);
   MotorDriver cover = makeCover(MOTOR_DRIVER_FWD_PIN, MOTOR_DRIVER_REV_PIN, HIGH, 3000, &state);
   for (int i = 0; i < 100; i ++) {
-    state.write(CoverState::open);
+    state.write(CoverAction::open);
     cover.run();
     delay(220);
-    state.write(CoverState::closed);
+    state.write(CoverAction::closed);
     cover.run();
     delay(220);
   }

@@ -221,35 +221,43 @@ class Timer : public Runnable {
 
 // Don't run a function more than every n milliseconds.
 // Not a timer, but timer-related.
+template <typename TReturn>
 class Throttle {
   private:
     bool _canRun;
     Timer _timer;
-    std::function<void()> _callback;
+    std::function<TReturn()> _callback;
 
   public:
-    Throttle(unsigned long minDelay, std::function<void()> callback)
+    Throttle(unsigned long minDelay, std::function<TReturn()> callback)
     :
       _canRun(true),
       _timer(Timer(minDelay, [this](){ _canRun = true; }, 1)),
       _callback(callback)
     { }
 
-    bool tryRun() {
+    std::optional<TReturn> tryRun() {
       _timer.run();
       if (!_canRun) {
-        return false;
+        return std::nullopt;
       }
-      _callback();
+      TReturn value = _callback();
       _canRun = false;
       _timer.restart();
-      return true;
+      return value;
     }
 
     void clear() {
       _canRun = true;
       _timer.restart();
     }
+};
+
+class BasicThrottle : public Throttle<bool> {
+  public:
+    BasicThrottle(unsigned long minDelay, std::function<void()> callback)
+    : Throttle<bool>(minDelay, [callback]() { callback(); return true; })
+    { }
 };
 
 #endif

@@ -44,14 +44,14 @@ class ThrottlingProcess : public Input<T> {
     unsigned long _minDelay;
     T _lastReadValue;
     bool _canReadAgain;
-    Throttle _throttle;
+    BasicThrottle _throttle;
 
   public:
     ThrottlingProcess(Input<T>* wrappedInput, unsigned long minDelay)
     :
       _wrappedInput(wrappedInput),
       _canReadAgain(true),
-      _throttle(Throttle(minDelay, [this](){ _canReadAgain = true; }))
+      _throttle(minDelay, [this](){ _canReadAgain = true; })
     { }
 
     virtual T read() {

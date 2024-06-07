@@ -136,6 +136,29 @@ void test_two_point_calibration_multi_process() {
   TEST_ASSERT_EQUAL_FLOAT(50.0f, calibrated.readChannel(2));
 }
 
+void test_optional_pinning_process() {
+  StateInput<std::optional<int>> switchInput(std::nullopt);
+  OptionalPinningProcess deoptionaliser(&switchInput, 0);
+  TEST_ASSERT_EQUAL(0, deoptionaliser.read());
+  switchInput.write(15);
+  TEST_ASSERT_EQUAL(15, deoptionaliser.read());
+  switchInput.write(std::nullopt);
+  TEST_ASSERT_EQUAL(15, deoptionaliser.read());
+  switchInput.write(12);
+  deoptionaliser = OptionalPinningProcess(&switchInput, 0);
+  TEST_ASSERT_EQUAL(12, deoptionaliser.read());
+}
+
+void test_lift_to_optional_process() {
+  StateInput<std::optional<int>> switchInput(std::nullopt);
+  OptionalPinningProcess deoptionaliser(&switchInput, 0);
+  TranslatingProcess<int, int> translator(&deoptionaliser, [](int value) { return value * 2; });
+  LiftToOptionalProcess optionalTranslator(&translator, &switchInput);
+  TEST_ASSERT_FALSE(optionalTranslator.read().has_value());
+  switchInput.write(12);
+  TEST_ASSERT_EQUAL(24, optionalTranslator.read().value());
+}
+
 int main(int argc, char **argv) {
   UNITY_BEGIN();
   RUN_TEST(test_translating_process);

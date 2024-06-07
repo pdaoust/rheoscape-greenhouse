@@ -7,8 +7,8 @@
 #include <input/TimeProcesses.h>
 #include <input/TranslatingProcesses.h>
 #include <output/DigitalPinOutput.h>
-#include <output/MotorDriver.h>
 #include <output/Output.h>
+#include <output/MotorDriver.h>
 
 // Wrap the input in a throttling process, to be gentle on hardware.
 // Mechanical relays have coils that can't take more than e.g. a 2 second cycling time,
@@ -33,9 +33,9 @@ DigitalPinOutput makeRelay(
   );
 }
 
-enum CoverState {
-  closed,
-  open
+enum CoverAction {
+  closeCover,
+  openCover
 };
 
 // Wrap a motor controller in a throttling process that also converts booleans to floats.
@@ -46,17 +46,17 @@ MotorDriver makeCover(
   uint8_t closePin,
   bool controlPinActiveState,
   unsigned long excursionTime,
-  Input<CoverState>* input
+  Input<CoverAction>* input
 ) {
   // FIXME: memory leak
-  auto throttle = new ThrottlingProcess<CoverState>(
+  auto throttle = new ThrottlingProcess<CoverAction>(
     input,
     excursionTime
   );
-  auto translator = new TranslatingProcess<CoverState, float>(
+  auto translator = new TranslatingProcess<CoverAction, float>(
     throttle,
-    [](CoverState value) {
-      return (float)(value == open ? 1.0 : -1.0);
+    [](CoverAction value) {
+      return (value == CoverAction::openCover) ? 1.0f : -1.0f;
     }
   );
   return MotorDriver(

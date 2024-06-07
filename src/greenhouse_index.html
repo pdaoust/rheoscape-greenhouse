@@ -24,9 +24,58 @@
     <script>
       const ws = new WebSocket(`${window.location.protocol == 'https:' ? 'wss' : 'ws'}://${window.location.host}/ws`);
 
+      function convertTempFromC(tempC, units = undefined) {
+        if (typeof units == 'undefined') {
+          units = document.getElementById('temp_unit_control').value;
+        }
+        switch (units.value) {
+          case 'celsius': return tempC;
+          case 'fahrenheit': return tempC * (9 / 5 + 32);
+          case 'kelvin': return tempC + 273.15;
+        }
+      }
+
+      function convertTempToC(temp, units = undefined) {
+        if (typeof units == 'undefined') {
+          units = document.getElementById('temp_unit_control').value;
+        }
+        switch (units.value) {
+          case 'celsius': return temp;
+          case 'fahrenheit': return (temp - 32) * (5 / 9);
+          case 'kelvin': return temp - 273.15;
+        }
+      }
+
+      // Called when the user changes the temp units or the server sends a new temp units value.
+      // This is because all server-side temp units are °C.
+      function updateAllTempValues(newUnit) {
+        const allTempUnitEls = window.querySelectorAll('.temp_control, .temp_display');
+        for (const el of allTempUnitEls) {
+          const oldTempValue = Number(el.attr('data-temp-c'));
+          const newTempValue = Math.round(convertTempFromC(tempValueInC, newUnit) * 10) / 10;
+          if (el.nodeType == 'input') {
+            el.value = newTempValue;
+          } else {
+            el.innerText = newTempValue;
+          }
+        }
+      }
+
+      // Called when the server pushes a new value to an element.
+      // This is actually a helper function once updateLocalState resolves to an element.
       function updateStateElement(el, value, flash = true) {
+        if (window.focusedWidget && el.id == window.focusedWidget) {
+          // Don't update a focused widget; that's too confusing.
+          return;
+        }
         let previousValue;
-        if (el.nodeType == 'input' || el.nodeType == 'textarea') {
+        if (el.classList.contains('temp_control') || el.classList.contains('temp_display')) {
+          el.attributes['data-temp-c'] = value;
+          // Now that we've stored the underlying value, which is always °C,
+          // convert the value to display temp units for display in an input or span.
+          value = convertTempFromC(value);
+        }
+        if (el.nodeType == 'input' || el.nodeType == 'textarea' || el.nodeType == 'select') {
           if (el.attr('type') == 'checkbox' || el.attr('type') == 'radio') {
             previousValue = el.checked;
             el.checked = value;
@@ -35,7 +84,14 @@
             el.value = value;
           }
         } else {
-          previousVlaue = el.innerText
+          previousValue = el.innerText
+          switch (typeof value) {
+            case "boolean": value = value ? "on" : "off"; break;
+            // One point of decimal precision is enough.
+            case "number": value = Math.round(value * 10) / 10; break;
+            // The only kind of object here by this point should be null.
+            case "object": value = "?"; break;
+          }
           el.innerText = value;
         }
 
@@ -45,10 +101,11 @@
         }
       }
 
+      // A recursive function that's called when the server sends a message to update some state on the page.
       function updateLocalState(key, data, flash = true) {
         // The data of a local state update message may be flat, e.g.,
         //
-        //   { "temp": 31.5, "doorsOpen": true }
+        //   { "temp": 31.5, "doors_open": true }
         //
         // Or it may be nested, e.g.,
         //
@@ -60,20 +117,23 @@
         // and that value is assigned to the value or innerText of the element
         // whose ID and/or class matches the full concatenated key.
         // For example, the second example above might set the value or innerText of two matching selectors:
-        // * `#oven-control-setpoint` set to 200
-        // * `.oven-control-hysteresis` set to 10
+        // * `#oven_control_setpoint` set to 200
+        // * `.oven_control_hysteresis` set to 10
         if (typeof value == 'object') {
           for (const childKey in value) {
-            const fullKey = key ? `${key}-${childKey}` : childKey;
+            const fullKey = key ? `${key}_${childKey}` : childKey;
             updateLocalState(fullKey, value[childKey], flash);
           }
           return;
         }
 
         // Is there an element whose ID matches?
-        const el = document.querySelector(`#${key}`);
+        const el = document.getElementById(key);
         if (el) {
           updateStateElement(el, value, flash);
+          if (el.id == 'temp_unit_control') {
+            updateAllTempValues(value);
+          }
         }
 
         // And are there any elements with a class that matches?
@@ -85,8 +145,8 @@
         }
       }
 
-      window.on('load', () => {
-        fetch('/all-state')
+      window.addEventListener('load', () => {
+        fetch('/allState')
           .then((response) => {
             const state = JSON.parse(response.body);
             for (const key in state) {
@@ -95,15 +155,33 @@
           });
         
         ws.addEventListener('open', () => {
-          window.addEventListener('input', (event) => {
+          document.addEventListener('input', (event) => {
             const el = event.target;
+            let value = (el.attr('type') == 'checkbox' || el.attr('type') == 'radio')
+                ? el.checked
+                : el.value;
+            if (el.classList.contains('temp_control')) {
+              value = convertTempToC(value);
+              // Store the °C value in the element's attributes
+              // so we can calculate with it later if the temp unit control changes.
+              el.attributes['data-temp-c'] = value;
+            }
+
+            // Update all the temperature values.
+            if (el.id == 'temp_unit_control') {
+              updateAllTempValues(el.value);
+            }
+
             ws.send(JSON.stringify({
               type: 'updateState',
               key: el.id,
-              value: (el.attr('type') == 'checkbox' || el.attr('type') == 'radio')
-                ? el.checked
-                : el.value
+              value: value
             }));
+          });
+
+          document.addEventListener('focus', (event) => {
+            const el = event.target;
+            window.focusedWidget = el.id;
           });
         });
 
@@ -123,20 +201,43 @@
     <h1>Greenhouse</h1>
 
     <section>
+      <h2>Random stuff</h2>
+
+      <div class="pvl">
+        <div class="pv">
+          <div class="p">Temp units</div>
+          <div class="v">
+            <select id="temp_unit_control">
+              <option value="celsius">°C</option>
+              <option valaue="fahrenheit">°F</option>
+              <option value="kelvin">Kelvins</option>
+            </select>
+          </div>
+      </div>
+    </section>
+
+    <section>
       <h2>Shelf</h2>
 
       <div class="pvl">
         <div class="pv">
           <div class="p">Temp</div>
-          <div class="v"><span id="shelf-temp" class="reactive"></span><span class="temp-unit reactive"></span></div>
+          <div class="v"><span id="shelf_temp" class="temp_display reactive"></span><span class="temp_unit_display reactive"></span></div>
+        </div>
+        <div class="pv">
+          <div class="p">Temp calibration</div>
+          <div class="v">
+            <div class="vr">low ref <input id="shelf_temp_calibration_low_reference" class="temp_control reactive" type="number" /> raw <input id="shelf_temp_calibration_low_raw" class="temp_control reactive" type="number" /></div>
+            <div class="vr">high ref <input id="shelf_temp_calibration_high_reference" class="temp_control reactive" type="number" /> raw <input id="shelf_temp_calibration_high_raw" class="temp_control reactive" type="number" /></div>
+          </div>
         </div>
         <div class="pv">
           <div class="p">Hum</div>
-          <div class="v"><span id="shelf-hum" class="reactive"></span>% RH</div>
+          <div class="v"><span id="shelf_hum" class="reactive"></span>% RH</div>
         </div>
         <div class="pv">
           <div class="p">Light</div>
-          <span classs="v"><span id="shelf-light" class="reactive"></span>lux</span>
+          <span classs="v"><span id="shelf_light" class="reactive"></span>lux</span>
         </div>
       </div>
     </section>
@@ -147,46 +248,67 @@
       <div class="pvl">
         <div class="pv">
           <div class="p">Ground temp</div>
-          <div class="v"><span id="ground-temp" class="reactive"></span><span class="temp-unit reactive"></span></div>
+          <div class="v"><span id="ground_temp" class="temp_display reactive"></span><span class="temp_unit_display reactive"></span></div>
         </div>
         <div class="pv">
-          <div class="p">Ceil temp</div>
-          <div class="v"><span id="ceil-temp" class="reactive"></span><span class="temp-unit reactive"></span></div>
+          <div class="p">Ground temp calibration</div>
+          <div class="v">
+            <div class="vr">low ref <input id="ground_temp_calibration_low_reference" class="temp_control reactive" type="number" /> raw <input id="ground_temp_calibration_low_raw" class="temp_control reactive" type="number" /></div>
+            <div class="vr">high ref <input id="ground_temp_calibration_high_reference" class="temp_control reactive" type="number" /> raw <input id="ground_temp_calibration_high_raw" class="temp_control reactive" type="number" /></div>
+          </div>
+        </div>
+        <div class="pv">
+          <div class="p">Ceiling temp</div>
+          <div class="v"><span id="ceil_temp" class="temp_display reactive"></span><span class="temp_unit_display reactive"></span></div>
+        </div>
+        <div class="pv">
+          <div class="p">Ceiling temp calibration</div>
+          <div class="v">
+            <div class="vr">low ref <input id="ceiling_temp_calibration_low_reference" class="temp_control reactive" type="number" /> raw <input id="ceiling_temp_calibration_low_raw" class="temp_control reactive" type="number" /></div>
+            <div class="vr">high ref <input id="ceiling_temp_calibration_high_reference" class="temp_control reactive" type="number" /> raw <input id="ceiling_temp_calibration_high_raw" class="temp_control reactive" type="number" /></div>
+          </div>
         </div>
         <div class="pv">
           <div class="p">Yuzu temp</div>
-          <div class="v"><span id="yuzu-temp" class="reactive"></span><span class="temp-unit reactive"></span></div>
+          <div class="v"><span id="yuzu_temp" class="temp_display reactive"></span><span class="temp_unit_display reactive"></span></div>
+        </div>
+        <div class="pv">
+          <div class="p">Yuzu temp calibration</div>
+          <div class="v">
+            <div class="vr">low ref <input id="yuzu_temp_calibration_low_reference" class="temp_control reactive" type="number" /> raw <input id="yuzu_temp_calibration_low_raw" class="temp_control reactive" type="number" /></div>
+            <div class="vr">high ref <input id="yuzu_temp_calibration_high_reference" class="temp_control reactive" type="number" /> raw <input id="yuzu_temp_calibration_high_raw" class="temp_control reactive" type="number" /></div>
+          </div>
         </div>
         <div class="pv">
           <div class="p">Fan</div>
-          <div id="fan-status" class="v reactive"></div>
+          <div id="fan_status" class="v reactive"></div>
         </div>
         <div class="pv"></div>
           <div class="p">Fan control</div>
           <div class="v">
             <div class="vr">
-              <input id="fan-control-setpoint" class="reactive" type="number" size="5"/><span class="temp-unit reactive"></span>
-              ±<input id="fan-control-hysteresis" class="reactive" type="number" size="2"/><span class="temp-unit reactive"></span>
+              <input id="fan_control_setpoint" class="temp_control reactive" type="number" size="5"/><span class="temp_unit_display reactive"></span>
+              ±<input id="fan_control_hysteresis" class="temp_control reactive" type="number" size="2"/><span class="temp_unit_display reactive"></span>
             </div>
             <div class="vr">
-              (on at <span id="fan-temp-min" class="reactive"></span><span class="temp-unit reactive"></span>,
-              off at <span id="fan-temp-max" class="reactive"></span><span class="temp-unit reactive"></span>)
+              (on at <span id="fan_range_min" class="temp_display reactive"></span><span class="temp_unit_display reactive"></span>,
+              off at <span id="fan_range_max" class="temp_display reactive"></span><span class="temp_unit_display reactive"></span>)
             </div>
           </div>
         </div>
         <div class="pv">
           <div class="p">Heater</div>
-          <div id="heater-status" class="v reactive"></div>
+          <div id="heater_status" class="v reactive"></div>
         </div>
         <div class="pv">
           <div class="p">Heater control</div>
           <div class="v">
             <div class="vr">
-              <input id="heater-control-setpoint" class="reactive" type="number" size="5"/><span class="temp-unit reactive"></span>
-              ±<input id="heater-control-hysteresis" class="reactive" type="number" size="2"/><span class="temp-unit reactive"></span>
+              <input id="heater_control_setpoint" class="temp_control reactive" type="number" size="5"/><span class="temp_unit_display reactive"></span>
+              ±<input id="heater_control_hysteresis" class="temp_control reactive" type="number" size="2"/><span class="temp_unit_display reactive"></span>
             </span>
             <div class="vr">
-              (on at <span id="heater-temp-min" class="reactive"></span><span class="temp-unit reactive"></span>, off at <span id="heater-temp-max" class="reactive"></span><span class="temp-unit reactive"></span>)
+              (on at <span id="heater_range_min" class="temp_display reactive"></span><span class="temp_unit_display reactive"></span>, off at <span id="heater_range_max" class="temp_display reactive"></span><span class="temp_unit_display reactive"></span>)
             </span>
           </div>
         </div>
@@ -198,41 +320,48 @@
 
       <div class="pvl">
         <div class="pv">
+          <div class="p">Extreme temperature alarms</div>
+          <div class="v">
+            <div class="vr">min <input id="extreme_temp_alarm_control_min" class="temp_control reactive" type="number" size="5"/><span class="temp_unit_display reactive"></span></div>
+            <div class="vr">max <input id="extreme_temp_alarm_control_max" class="temp_control reactive" type="number" size="5"/><span class="temp_unit_display reactive"></span></div>
+          </div>
+        </div>
+        <div class="pv">
           <div class="p">West door</div>
-          <div id="west-door-status" class="v reactive"></div>
+          <div id="west_door_status" class="v reactive"></div>
         </div>
         <div class="pv">
           <div class="p">East door</div>
-          <div id="east-door-status" class="v reactive"></div>
+          <div id="east_door_status" class="v reactive"></div>
         </div>
         <div class="pv">
           <div class="p">Door alarms</div>
           <div class="v">
-            <div class="vr">close alarm at <input id="door-alarm-control-min" class="reactive" type="number" size="5"/><span class="temp-unit reactive"></span></div>
-            <div class="vr">open alarm at <input id="door-alarm-control-max" class="reactive" type="number" size="5"/><span class="temp-unit reactive"></span></div>
+            <div class="vr">close alarm at <input id="door_alarm_control_min" class="temp_control reactive" type="number" size="5"/><span class="temp_unit_display reactive"></span></div>
+            <div class="vr">open alarm at <input id="door_alarm_control_max" class="temp_control reactive" type="number" size="5"/><span class="temp_unit_display reactive"></span></div>
           </div>
         </div>
         <div class="pv">
           <div class="p">Door alarm type</div>
           <div class="v">
-            <div class="vr"><label><input id="door-alarm-noise" class="reactive" type="checkbox" /> make a noise</label></div>
-            <div class="vr">send message to <input id="door-alarm-phone" class="reactive" type="tel" /></div>
+            <div class="vr"><label><input id="door_alarm_noise" class="reactive" type="checkbox" /> make a noise</label></div>
+            <div class="vr">send message to <input id="door_alarm_phone" class="reactive" type="tel" /></div>
           </div>
         </div>
         <div class="pv">
           <div class="p">Roof vents</div>
-          <div id="roof-vents-status" class="v reactive"></div>
+          <div id="roof_vents_status" class="v reactive"></div>
         </div>
         <div class="pv">
           <div class="p">Roof vents control</div>
           <div class="v">
             <div class="vr">
-              <input id="roof-vents-control-setpoint" class="reactive" type="number" size="5"/><span class="temp-unit reactive"></span>
-              ±<input id="roof-vents-control-hysteresis" class="reactive" type="number" size="2"/><span class="temp-unit reactive"></span>
+              <input id="roof_vents_control_setpoint" class="temp_control reactive" type="number" size="5"/><span class="temp_unit_display reactive"></span>
+              ±<input id="roof_vents_control_hysteresis" class="temp_control reactive" type="number" size="2"/><span class="temp_unit_display reactive"></span>
             </div>
             <div class="vr">
-              (on at <span id="roof-vents-temp-min" class="reactive"></span><span class="temp-unit reactive"></span>,
-              off at <span id="roof-vents-temp-max" class="reactive"></span><span class="temp-unit reactive"></span>)
+              (on at <span id="roof_vents_range_min" class="reactive"></span><span class="temp_unit_display reactive"></span>,
+              off at <span id="roof_vents_range_max" class="reactive"></span><span class="temp_unit_display reactive"></span>)
             </div>
           </div>
         </div>
@@ -245,35 +374,49 @@
       <div class="pvl">
         <div class="pv">
           <div class="p">Mat 1</div>
-          <div id="mat-1-status" class="v reactive"></div>
+          <div class="v"><span id="mat_1_status" class="reactive"></span>, temp <span id="mat_1_temp" class="temp_display reactive"></span><span class="temp_unit_display reactive"></span></div>
+        </div>
+        <div class="pv">
+          <div class="p">Mat 1 temp calibration</div>
+          <div class="v">
+            <div class="vr">low ref <input id="mat_1_temp_calibration_low_reference" class="temp_control reactive" type="number" /> raw <input id="mat_1_temp_calibration_low_raw" class="temp_control reactive" type="number" /></div>
+            <div class="vr">high ref <input id="mat_1_temp_calibration_high_reference" class="temp_control reactive" type="number" /> raw <input id="mat_1_temp_calibration_high_raw" class="temp_control reactive" type="number" /></div>
+          </div>
         </div>
         <div class="pv">
           <div class="p">Mat 1 control</div>
           <div class="v">
             <div class="vr">
-              <input id="mat-1-control-setpoint" class="reactive" type="number" size="5"/><span class="temp-unit reactive"></span>
-              ±<input id="mat-1-control-hysteresis" class="reactive" type="number" size="2"/><span class="temp-unit reactive"></span>
+              <input id="mat_1_control_setpoint" class="temp_control reactive" type="number" size="5"/><span class="temp_unit_display reactive"></span>
+              ±<input id="mat_1_control_hysteresis" class="temp_control reactive" type="number" size="2"/><span class="temp_unit_display reactive"></span>
             </div>
             <div class="vr">
-              (on at <span id="mat-1-temp-min" class="reactive"></span><span class="temp-unit reactive"></span>,
-              off at <span id="mat-1-temp-max" class="reactive"></span><span class="temp-unit reactive"></span>)
+              (on at <span id="mat_1_range_min" class="temp_display reactive"></span><span class="temp_unit_display reactive"></span>,
+              off at <span id="mat_1_range_max" class="temp_display reactive"></span><span class="temp_unit_display reactive"></span>)
             </span>
           </div>
         </div>
         <div class="pv">
           <div class="p">Mat 2</div>
-          <div id="mat-2-status" class="v reactive"></div>
+          <div class="v"><span id="mat_2_status" class="reactive"></span>, temp <span id="mat_2_temp" class="temp_display reactive"></span><span class="temp_unit_display reactive"></span></div>
+        </div>
+        <div class="pv">
+          <div class="p">Mat 2 temp calibration</div>
+          <div class="v">
+            <div class="vr">low ref <input id="mat_2_temp_calibration_low_reference" class="temp_control reactive" type="number" /> raw <input id="mat_2_temp_calibration_low_raw" class="temp_control reactive" type="number" /></div>
+            <div class="vr">high ref <input id="mat_2_temp_calibration_high_reference" class="temp_control reactive" type="number" /> raw <input id="mat_2_temp_calibration_high_raw" class="temp_control reactive" type="number" /></div>
+          </div>
         </div>
         <div class="pv">
           <div class="p">Mat 2 control</div>
           <div class="v">
             <div class="vr">
-              <input id="mat-2-control-setpoint" class="reactive" type="number" size="5"/><span class="temp-unit reactive"></span>
-              ±<input id="mat-2-control-hysteresis" class="reactive" type="number" size="2"/><span class="temp-unit reactive"></span>
+              <input id="mat_2_control_setpoint" class="temp_control reactive" type="number" size="5"/><span class="temp_unit_display reactive"></span>
+              ±<input id="mat_2_control_hysteresis" class="temp_control reactive" type="number" size="2"/><span class="temp_unit_display reactive"></span>
             </div>
             <div class="vr">
-              (on at <span id="mat-2-temp-min" class="reactive"></span><span class="temp-unit reactive"></span>,
-              off at <span id="mat-2-temp-max" class="reactive"></span><span class="temp-unit reactive"></span>)
+              (on at <span id="mat_2_range_min" class="temp_display reactive"></span><span class="temp_unit_display reactive"></span>,
+              off at <span id="mat_2_range_max" class="temp_display reactive"></span><span class="temp_unit_display reactive"></span>)
             </div>
           </div>
         </div>

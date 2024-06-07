@@ -266,8 +266,8 @@ class AvgProcess : public Input<T> {
     : AvgProcess(new InputOfInputs(inputs))
     { }
 
-    AvgProcess(std::initializer_list<Input<T>*>* inputs)
-    : AvgProcess((std::vector<Input<T>*>*) inputs)
+    AvgProcess(std::initializer_list<Input<T>*> inputs)
+    : AvgProcess((std::vector<Input<T>*>*) &inputs)
     { }
 
     virtual T read() {

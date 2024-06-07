@@ -14,17 +14,34 @@ class InputToEventStream : public EventStream<T>, public Runnable {
   private:
     Input<T>* _wrappedInput;
     std::optional<T> _lastSeenValue;
-  
+    std::optional<Throttle<T>> _throttle;
+    
   public:
-    InputToEventStream(Input<T>* wrappedInput)
-    : _wrappedInput(wrappedInput)
+    InputToEventStream(Input<T>* wrappedInput, unsigned long throttleRead = 0)
+    :
+      _wrappedInput(wrappedInput),
+      _throttle(throttleRead
+        ? (std::optional<Throttle<T>>)Throttle<T>(throttleRead, [wrappedInput]() { return wrappedInput->read(); })
+        : (std::optional<Throttle<T>>)std::nullopt
+      )
     { }
 
     virtual void run() {
-      T value = _wrappedInput->read();
-      if (!_lastSeenValue.has_value() || value != _lastSeenValue.value()) {
-        _lastSeenValue = value;
-        EventStream<T>::_emit(value);
+      std::optional<T> nextValue;
+      if (_throttle.has_value()) {
+        nextValue = _throttle.value().tryRun();
+      } else {
+        nextValue = _wrappedInput->read();
+      }
+
+      if (!nextValue.has_value()) {
+        return;
+      }
+
+      T nextValueValue = nextValue.value();
+      if (!_lastSeenValue.has_value() || nextValueValue != _lastSeenValue.value()) {
+        _lastSeenValue = nextValueValue;
+        EventStream<T>::_emit(nextValueValue);
       }
     }
 };
