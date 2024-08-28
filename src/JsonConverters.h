@@ -214,6 +214,8 @@ void convertToJson(GreenhouseState* const& ghState, JsonVariant dest) {
   dest["ceiling_temp_calibration"] = ghState->ceiling_temp_calibration->read();
   dest["yuzu_temp"] = unwrapOptionalEventStream(ghState->yuzu_temp);
   dest["yuzu_temp_calibration"] = ghState->yuzu_temp_calibration->read();
+  dest["fish_tank_temp"] = unwrapOptionalEventStream(ghState->fish_tank_temp);
+  dest["fish_tank_temp_calibration"] = ghState->fish_tank_temp_calibration->read();
   dest["fan_status"] = unwrapEventStream(ghState->fan_status);
   dest["fan"] = ghState->fan->read();
   dest["heater_status"] = unwrapEventStream(ghState->heater_status);

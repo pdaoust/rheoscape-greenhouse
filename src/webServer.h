@@ -138,6 +138,8 @@ void receiveWebSocketEvent(AsyncWebSocket* server, AsyncWebSocketClient* client,
           updateTwoPointCalibrationValue(ghState->ceiling_temp_calibration, stateToUpdate.substr(24), kvp.value().as<float>());
         } else if (stateToUpdate.substr(0, 21) == "yuzu_temp_calibration") {
           updateTwoPointCalibrationValue(ghState->yuzu_temp_calibration, stateToUpdate.substr(21), kvp.value().as<float>());
+        } else if (stateToUpdate.substr(0, 21) == "fish_tank_temp_calibration") {
+          updateTwoPointCalibrationValue(ghState->fish_tank_temp_calibration, stateToUpdate.substr(21), kvp.value().as<float>());
         } else if (stateToUpdate.substr(0, 22) == "mat_1_temp_calibration") {
           updateTwoPointCalibrationValue(ghState->mat_1_temp_calibration, stateToUpdate.substr(22), kvp.value().as<float>());
         } else if (stateToUpdate.substr(0, 22) == "mat_2_temp_calibration") {
@@ -161,6 +163,8 @@ void setupWebServer(GreenhouseState* ghState) {
   ghState->ceiling_temp_calibration->registerSubscriber([](Event<TwoPointCalibration<float>> e) { sendStateUpdatedMessage("ceiling_temp_calibration", e.value); });
   ghState->yuzu_temp->registerSubscriber([](Event<std::optional<float>> e) { sendStateUpdatedMessage("yuzu_temp", e.value); });
   ghState->yuzu_temp_calibration->registerSubscriber([](Event<TwoPointCalibration<float>> e) { sendStateUpdatedMessage("yuzu_temp_calibration", e.value); });
+  ghState->fish_tank_temp->registerSubscriber([](Event<std::optional<float>> e) { sendStateUpdatedMessage("fish_tank_temp", e.value); });
+  ghState->fish_tank_temp_calibration->registerSubscriber([](Event<TwoPointCalibration<float>> e) { sendStateUpdatedMessage("fish_tank_temp_calibration", e.value); });
   ghState->fan_status->registerSubscriber([](Event<bool> e) { sendStateUpdatedMessage("fan_status", e.value); });
   ghState->fan->registerSubscriber([](Event<SetpointAndHysteresis<float>> e) { sendStateUpdatedMessage("fan", e.value); });
   ghState->heater_status->registerSubscriber([](Event<bool> e) { sendStateUpdatedMessage("heater_status", e.value); });

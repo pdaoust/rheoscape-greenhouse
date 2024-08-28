@@ -66,66 +66,114 @@ class MergingRangeProcess : public Input<Range<T>> {
 };
 
 // Merges two inputs into one tuple input.
-template <typename T1, typename T2>
-class Merging2Process : public Input<std::tuple<T1, T2>> {
+template <typename T1, typename T2, typename TMerged>
+class Merging2Process : public Input<TMerged> {
   private:
     Input<T1>* _input1;
     Input<T2>* _input2;
+    std::function<TMerged(T1, T2)> _merger;
   
   public:
-    Merging2Process(Input<T1>* input1, Input<T2>* input2)
+    Merging2Process(Input<T1>* input1, Input<T2>* input2, std::function<TMerged(T1, T2)> merger)
     :
       _input1(input1),
-      _input2(input2)
+      _input2(input2),
+      _merger(merger)
     { }
 
-    virtual std::tuple<T1, T2> read() {
-      return std::tuple<T1, T2>(_input1->read(), _input2->read());
+    virtual TMerged read() {
+      return _merger(_input1->read(), _input2->read());
     }
 };
 
 template <typename T1, typename T2>
-class Merging2NotEmptyProcess : public Input<std::optional<std::tuple<T1, T2>>> {
-  private:
-    Input<std::optional<T1>>* _input1;
-    Input<std::optional<T2>>* _input2;
-  
+class Merging2TupleProcess : public Merging2Process<T1, T2, std::tuple<T1, T2>> {
   public:
-    Merging2NotEmptyProcess(Input<std::optional<T1>>* input1, Input<std::optional<T2>>* input2)
-    :
-      _input1(input1),
-      _input2(input2)
-    { }
-
-    virtual std::optional<std::tuple<T1, T2>> read() {
-      std::optional<T1> value1 = _input1->read();
-      std::optional<T2> value2 = _input2->read();
-      if (!value1.has_value() || !value2.has_value()) {
-        return std::nullopt;
-      }
-
-      return std::tuple<T1, T2>(value1.value(), value2.value());
-    }
+    Merging2TupleProcess(Input<T1>* input1, Input<T2>* input2)
+  : Merging2Process<T1, T2, std::tuple<T1, T2>>(input1, input2, [](T1 value1, T2 value2) { return std::tuple(value1, value2); })
+  { }
 };
 
-template <typename T1, typename T2, typename T3>
-class Merging3Process : public Input<std::tuple<T1, T2, T3>> {
+template <typename T1, typename T2, typename TMerged>
+class Merging2NotEmptyProcess : public Merging2Process<std::optional<T1>, std::optional<T2>, std::optional<TMerged>> {
+  public:
+    Merging2NotEmptyProcess(Input<std::optional<T1>>* input1, Input<std::optional<T2>>* input2, std::function<TMerged(T1, T2)> merger)
+    : Merging2Process<std::optional<T1>, std::optional<T2>, std::optional<TMerged>>(
+      input1,
+      input2,
+      [merger](std::optional<T1> value1, std::optional<T2> value2) {
+        if (value1.has_value() && value2.has_value()) {
+          return merger(value1.value(), value2.value());
+        }
+        return std::nullopt;
+      }
+    )
+    { }
+};
+
+template <typename T1, typename T2>
+class Merging2TupleNotEmptyProcess : public Merging2NotEmptyProcess<T1, T2, std::tuple<T1, T2>> {
+  public:
+    Merging2TupleNotEmptyProcess(Input<std::optional<T1>>* input1, Input<std::optional<T2>>* input2)
+  : Merging2NotEmptyProcess<T1, T2, std::tuple<T1, T2>>(input1, input2, [](T1 value1, T2 value2) { return std::tuple(value1, value2); })
+  { }
+};
+
+template <typename T1, typename T2, typename T3, typename TMerged>
+class Merging3Process : public Input<TMerged> {
   private:
     Input<T1>* _input1;
     Input<T2>* _input2;
     Input<T3>* _input3;
+    std::function<TMerged(T1, T2, T3)> _merger;
   
   public:
-    Merging3Process(Input<T1>* input1, Input<T2>* input2, Input<T3>* input3)
+    Merging3Process(Input<T1>* input1, Input<T2>* input2, Input<T3>* input3, std::function<TMerged(T1, T2, T3)> merger = [](T1 value1, T2 value2, T3 value3) { return std::tuple(value1, value2, value3); })
     :
       _input1(input1),
       _input2(input2),
-      _input3(input3)
+      _input3(input3),
+      _merger(merger)
     { }
 
-    virtual std::tuple<T1, T2, T3> read() {
-      return std::tuple<T1, T2, T3>(_input1->read(), _input2->read(), _input3->read());
+    virtual TMerged read() {
+      return _merger(_input1->read(), _input2->read(), _input3->read());
     }
+};
+
+
+template <typename T1, typename T2, typename T3>
+class Merging3TupleProcess : public Merging3Process<T1, T2, T3, std::tuple<T1, T2, T3>> {
+  public:
+    Merging3TupleProcess(Input<T1>* input1, Input<T2>* input2, Input<T3>* input3)
+  : Merging3Process<T1, T2, T3, std::tuple<T1, T2, T3>>(input1, input2, input3, [](T1 value1, T2 value2, T3 value3) { return std::tuple(value1, value2, value3); })
+  { }
+};
+
+template <typename T1, typename T2, typename T3, typename TMerged>
+class Merging3NotEmptyProcess : public Merging3Process<std::optional<T1>, std::optional<T2>, std::optional<T3>, std::optional<TMerged>> {
+  public:
+    Merging3NotEmptyProcess(Input<std::optional<T1>>* input1, Input<std::optional<T2>>* input2, Input<std::optional<T3>>* input3, std::function<TMerged(T1, T2, T3)> merger)
+    : Merging3Process<std::optional<T1>, std::optional<T2>, std::optional<T3>, std::optional<TMerged>>(
+      input1,
+      input2,
+      input3,
+      [merger](std::optional<T1> value1, std::optional<T2> value2, std::optional<T3> value3) {
+        if (value1.has_value() && value2.has_value() && value3.has_value()) {
+          return merger(value1.value(), value2.value(), value3.value());
+        }
+        return std::nullopt;
+      }
+    )
+    { }
+};
+
+template <typename T1, typename T2, typename T3>
+class Merging3TupleNotEmptyProcess : public Merging3NotEmptyProcess<T1, T2, T3, std::tuple<T1, T2, T3>> {
+  public:
+    Merging3TupleNotEmptyProcess(Input<std::optional<T1>>* input1, Input<std::optional<T2>>* input2, Input<std::optional<T3>>* input3)
+  : Merging3NotEmptyProcess<T1, T2, T3, std::tuple<T1, T2, T3>>(input1, input2, input3, [](T1 value1, T2 value2, T3 value3) { return std::tuple(value1, value2, value3); })
+  { }
 };
 
 template <typename TIn, typename TOut>

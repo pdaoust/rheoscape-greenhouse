@@ -22,6 +22,8 @@ struct GreenhouseState {
     StateInput<TwoPointCalibration<float>>* ceiling_temp_calibration;
     InputToEventStream<std::optional<float>>* yuzu_temp;
     StateInput<TwoPointCalibration<float>>* yuzu_temp_calibration;
+    InputToEventStream<std::optional<float>>* fish_tank_temp;
+    StateInput<TwoPointCalibration<float>>* fish_tank_temp_calibration;
     InputToEventStream<bool>* fan_status;
     StateInput<SetpointAndHysteresis<float>>* fan;
     InputToEventStream<bool>* heater_status;
